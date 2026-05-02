@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "983322953388",
+    "project_id": "dehouse-market",
+    "storage_bucket": "dehouse-market.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:983322953388:android:073ff2ce5644442e6ac109",
+        "android_client_info": {
+          "package_name": "com.seu.nome.controlecompras"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "983322953388-4bt7vpioeg3q2rs33el0edr1en5lr6ml.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.seu.nome.controlecompras",
+            "certificate_hash": "957b83accdc14a152690308570ccdf78347f7f6d"
+          }
+        },
+        {
+          "client_id": "983322953388-7fl8c4j6ge1ob9sa5o0ddg9jgbjsa8s7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.seu.nome.controlecompras",
+            "certificate_hash": "5ee801af34fc8be9f21e7ff41ceedfc822968cd5"
+          }
+        },
+        {
+          "client_id": "983322953388-8scjqkpni7mqc4qsdj5n9v3luigk1kp9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.seu.nome.controlecompras",
+            "certificate_hash": "9a677faf458df885b450a029b49a5613518397bd"
+          }
+        },
+        {
+          "client_id": "983322953388-1mb5pquf9oimaga5mr85juk4j8sf1an7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjT4dpAsHbwrK8YJteBXx_0e-oIi8knz8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "983322953388-1mb5pquf9oimaga5mr85juk4j8sf1an7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
