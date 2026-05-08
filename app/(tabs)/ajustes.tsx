@@ -33,6 +33,9 @@ import { useThemeStore } from "../../store/useThemeStore";
 
 const CATEGORIAS = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 
+// Lista de todos os Estados Brasileiros
+const UFS = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"];
+
 export default function AjustesScreen() {
   // GESTÃO DO TEMA
   const systemTheme = useColorScheme() ?? "light";
@@ -63,7 +66,7 @@ export default function AjustesScreen() {
   
   // Estados para Entrada Manual da Sefaz
   const [modalSefazManual, setModalSefazManual] = useState(false);
-  const [estadoSefaz, setEstadoSefaz] = useState<"MA" | "PI">("MA");
+  const [estadoSefaz, setEstadoSefaz] = useState<string>("MA"); // Agora aceita qualquer string
   const [chaveSefaz, setChaveSefaz] = useState("");
   const [nfeSefaz, setNfeSefaz] = useState("");
   const [serieSefaz, setSerieSefaz] = useState("");
@@ -78,7 +81,7 @@ export default function AjustesScreen() {
     useCallback(() => {
       carregarEstatisticasGlobais();
       carregarOrcamentos();
-    }, []),
+    }, [familiaId]),
   );
 
   const mudarTema = (novoTema: "light" | "dark" | "system") => {
@@ -88,7 +91,7 @@ export default function AjustesScreen() {
 
   const carregarOrcamentos = async () => {
     try {
-      const salvos = await AsyncStorage.getItem("dehouse_orcamentos");
+      const salvos = await AsyncStorage.getItem(`dehouse_orcamentos_${familiaId}`);
       if (salvos) setOrcamentos(JSON.parse(salvos));
     } catch (e) {}
   };
@@ -97,16 +100,18 @@ export default function AjustesScreen() {
     const novos = { ...orcamentos, [cat]: valor.replace(",", ".") };
     setOrcamentos(novos);
     setSalvandoOrcamento(true);
-    await AsyncStorage.setItem("dehouse_orcamentos", JSON.stringify(novos));
-    setTimeout(() => setSalvandoOrcamento(false), 500); // Efeito visual de salvamento
+    await AsyncStorage.setItem(`dehouse_orcamentos_${familiaId}`, JSON.stringify(novos));
+    setTimeout(() => setSalvandoOrcamento(false), 500); 
   };
 
   const carregarEstatisticasGlobais = async () => {
     setLoading(true);
     try {
-      const result = await turso.execute(
-        "SELECT preco_prateleira, categoria FROM compras_historico",
-      );
+      // 🔥 FILTRADO PELA FAMÍLIA (Privacidade Garantida)
+      const result = await turso.execute({
+        sql: "SELECT preco_prateleira, categoria FROM compras_historico WHERE familia_id = ?",
+        args: [familiaId || ""]
+      });
       const compras = result.rows as any[];
 
       let total = 0;
@@ -141,9 +146,11 @@ export default function AjustesScreen() {
   const exportarDados = async () => {
     Haptics.selectionAsync();
     try {
-      const result = await turso.execute(
-        "SELECT * FROM compras_historico ORDER BY id DESC LIMIT 100",
-      );
+      // 🔥 FILTRADO PELA FAMÍLIA (Privacidade Garantida)
+      const result = await turso.execute({
+        sql: "SELECT * FROM compras_historico WHERE familia_id = ? ORDER BY id DESC LIMIT 100",
+        args: [familiaId || ""]
+      });
       const compras = result.rows as any[];
       if (compras.length === 0) {
         Alert.alert("Vazio", "Você não tem compras.");
@@ -164,7 +171,7 @@ export default function AjustesScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
       "Zerar Aplicativo",
-      "Isso apagará TODO o seu histórico e o saldo. Tem certeza?",
+      "Isso apagará TODO o histórico de compras da sua família. Tem certeza?",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -172,16 +179,18 @@ export default function AjustesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await turso.execute("DELETE FROM compras_historico");
-              await turso.execute("UPDATE carteira SET saldo = 0 WHERE id = 1");
+              // 🔥 APAGA APENAS DA FAMÍLIA (Privacidade Garantida)
+              await turso.execute({
+                sql: "DELETE FROM compras_historico WHERE familia_id = ?",
+                args: [familiaId || ""]
+              });
+              useCartStore.getState().atualizarSaldoBanco(0);
               await AsyncStorage.removeItem("dehouse_checklist");
               await AsyncStorage.removeItem("compras_offline");
-              await AsyncStorage.removeItem("dehouse_orcamentos");
+              await AsyncStorage.removeItem(`dehouse_orcamentos_${familiaId}`);
               setOrcamentos({});
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success,
-              );
-              Alert.alert("Sucesso", "O aplicativo foi resetado de fábrica.");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("Sucesso", "O histórico da sua família foi zerado.");
               carregarEstatisticasGlobais();
             } catch (error) {
               Alert.alert("Erro", "Falha ao zerar.");
@@ -197,7 +206,10 @@ export default function AjustesScreen() {
     setLoadingIA(true);
     setStatusIA("Analisando seu histórico...");
     try {
-      const result = await turso.execute("SELECT preco_prateleira, categoria FROM compras_historico");
+      const result = await turso.execute({
+        sql: "SELECT preco_prateleira, categoria FROM compras_historico WHERE familia_id = ?",
+        args: [familiaId || ""]
+      });
       const gastosCat: Record<string, number> = {};
       result.rows.forEach(r => {
         const cat = String(r.categoria || "Outros");
@@ -207,7 +219,7 @@ export default function AjustesScreen() {
       const sugestao = await sugerirOrcamentoInteligente(JSON.stringify(gastosCat));
       if(sugestao) {
         setOrcamentos(sugestao);
-        await AsyncStorage.setItem("dehouse_orcamentos", JSON.stringify(sugestao));
+        await AsyncStorage.setItem(`dehouse_orcamentos_${familiaId}`, JSON.stringify(sugestao));
         Alert.alert("Orçamento Atualizado", "A IA definiu as metas baseadas no seu histórico.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -218,7 +230,6 @@ export default function AjustesScreen() {
     }
   };
 
-  // 🔥 1. IMPORTAR LENDO O QR CODE DA SEFAZ (AGORA COM CABEÇALHOS DO CHROME E HTTPS)
   const processarSefazScan = async ({ data }: { data: string }) => {
     if (!data.toLowerCase().startsWith('http')) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -227,7 +238,6 @@ export default function AjustesScreen() {
     setStatusIA("Acessando portal da SEFAZ...");
     
     try {
-      // Força HTTPS para não ser bloqueado pelo Android Cleartext
       const urlSegura = data.replace(/^http:\/\//i, 'https://');
 
       const res = await fetch(urlSegura, { 
@@ -256,7 +266,7 @@ export default function AjustesScreen() {
     }
   };
 
-  // 🔥 2. IMPORTAR DIGITANDO A CHAVE MANUALMENTE (COM CAMPOS COMPLETOS)
+  // 🔥 2. AGORA DINÂMICO PARA TODOS OS ESTADOS (UFs)
   const processarSefazManual = async () => {
     if (chaveSefaz.length !== 44) {
       Alert.alert("Atenção", "A chave de acesso precisa ter 44 números.");
@@ -269,10 +279,39 @@ export default function AjustesScreen() {
     setStatusIA(`Consultando SEFAZ-${estadoSefaz}...`);
 
     try {
-      // Rotas Oficiais Corrigidas com HTTPS
-      const urlBase = estadoSefaz === "MA" 
-        ? `https://nfce.sefaz.ma.gov.br/portal/consultarNFCe.jsp?p=${chaveSefaz}` 
-        : `https://webas.sefaz.pi.gov.br/nfceweb/consultarNFCe.jsf?p=${chaveSefaz}`;
+      // Mapeamento dinâmico inteligente das rotas Sefaz no Brasil
+      const urlsSefaz: Record<string, string> = {
+        "AC": `http://hml.sefaznet.ac.gov.br/nfce/consulta?p=${chaveSefaz}`,
+        "AL": `http://nfce.sefaz.al.gov.br/consultaNFCe.htm?p=${chaveSefaz}`,
+        "AM": `https://sistemas.sefaz.am.gov.br/nfceweb/consultarNFCe.jsp?p=${chaveSefaz}`,
+        "AP": `https://www.sefaz.ap.gov.br/sate/nfce/consulta.action?p=${chaveSefaz}`,
+        "BA": `http://nfe.sefaz.ba.gov.br/servicos/nfce/modulos/geral/NFCEC_consulta_chave_acesso.aspx?p=${chaveSefaz}`,
+        "CE": `http://nfce.sefaz.ce.gov.br/pages/ShowNFCe.html?p=${chaveSefaz}`,
+        "DF": `http://dec.fazenda.df.gov.br/ConsultarNFCe.aspx?p=${chaveSefaz}`,
+        "ES": `http://app.sefaz.es.gov.br/ConsultaNFCe/qrcode.aspx?p=${chaveSefaz}`,
+        "GO": `http://nfe.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe?p=${chaveSefaz}`,
+        "MA": `https://nfce.sefaz.ma.gov.br/portal/consultarNFCe.jsp?p=${chaveSefaz}`,
+        "MG": `http://nfce.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=${chaveSefaz}`,
+        "MS": `http://www.dfe.ms.gov.br/nfce/consulta?p=${chaveSefaz}`,
+        "MT": `http://www.sefaz.mt.gov.br/nfce/consultanfce?p=${chaveSefaz}`,
+        "PA": `https://appnfc.sefa.pa.gov.br/portal/view/consultas/nfce/consultanfce.seam?p=${chaveSefaz}`,
+        "PB": `http://www.receita.pb.gov.br/nfce?p=${chaveSefaz}`,
+        "PE": `http://nfce.sefaz.pe.gov.br/nfce-web/consultarNFCe?p=${chaveSefaz}`,
+        "PI": `https://webas.sefaz.pi.gov.br/nfceweb/consultarNFCe.jsf?p=${chaveSefaz}`,
+        "PR": `http://www.fazenda.pr.gov.br/nfce/consulta?p=${chaveSefaz}`,
+        "RJ": `http://www4.fazenda.rj.gov.br/consultaNFCe/paginas/consultaChaveAcesso.faces?p=${chaveSefaz}`,
+        "RN": `http://nfce.set.rn.gov.br/consultarNFCe.aspx?p=${chaveSefaz}`,
+        "RO": `http://www.nfce.sefin.ro.gov.br/consultanfce/consulta.jsp?p=${chaveSefaz}`,
+        "RR": `http://www.sefaz.rr.gov.br/nfce/consulta?p=${chaveSefaz}`,
+        "RS": `https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=${chaveSefaz}`,
+        "SC": `https://sat.sef.sc.gov.br/tax.NET/sat.nfe.web/consulta_publica_nfe.aspx?p=${chaveSefaz}`,
+        "SE": `http://www.nfce.se.gov.br/portal/consultarNFCe.jsp?p=${chaveSefaz}`,
+        "SP": `https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx?p=${chaveSefaz}`,
+        "TO": `http://www.sefaz.to.gov.br/nfce/consulta.jsf?p=${chaveSefaz}`
+      };
+
+      // Usa a URL mapeada ou uma estrutura fallback padrão
+      const urlBase = urlsSefaz[estadoSefaz] || `https://www.sefaz.${estadoSefaz.toLowerCase()}.gov.br/nfce/consulta?p=${chaveSefaz}`;
 
       const res = await fetch(urlBase, { 
         headers: { 
@@ -290,7 +329,6 @@ export default function AjustesScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Importação Concluída!", `${json.itens.length} itens adicionados ao carrinho.`);
         
-        // Limpar os campos do Modal
         setChaveSefaz(""); setNfeSefaz(""); setSerieSefaz("");
         setEmissaoSefaz(""); setProtocoloSefaz(""); setDataAutSefaz("");
         
@@ -358,7 +396,10 @@ export default function AjustesScreen() {
                     {
                       text: "Sair",
                       style: "destructive",
-                      onPress: sairDaFamilia,
+                      onPress: () => {
+                        sairDaFamilia();
+                        useCartStore.setState({ carrinho: [], historico: [], saldo: 0 });
+                      },
                     },
                   ],
                 );
@@ -373,10 +414,10 @@ export default function AjustesScreen() {
           <View style={[styles.cardEstatistica, { borderColor: '#10B981', borderWidth: 2 }]}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
               <Ionicons name="receipt" size={24} color="#10B981" />
-              <Text style={styles.tituloSecao}>Portal SEFAZ Direto</Text>
+              <Text style={styles.tituloSecao}>Portal SEFAZ Brasil</Text>
             </View>
             <Text style={{ color: color.textSecondary, fontSize: 13, marginBottom: 16, lineHeight: 18 }}>
-              Puxe todos os itens da nota fiscal diretamente da base do governo estadual (MA ou PI). Sem falhas de leitura.
+              Puxe os itens da nota fiscal diretamente da base de dados de qualquer estado do país.
             </Text>
             
             <TouchableOpacity 
@@ -598,7 +639,14 @@ export default function AjustesScreen() {
                 "Deseja realmente sair da sua conta?",
                 [
                   { text: "Cancelar", style: "cancel" },
-                  { text: "Sair", style: "destructive", onPress: fazerLogout },
+                  { 
+                    text: "Sair", 
+                    style: "destructive", 
+                    onPress: () => {
+                      fazerLogout();
+                      useCartStore.setState({ carrinho: [], historico: [], saldo: 0 });
+                    }
+                  },
                 ],
               );
             }}
@@ -623,7 +671,7 @@ export default function AjustesScreen() {
             <Text
               style={{ color: color.borderDark, fontSize: 12, marginTop: 4 }}
             >
-              Versão 1.0.0 • Inteligência Local
+              Versão 1.0.1 • Inteligência Local
             </Text>
           </View>
         </ScrollView>
@@ -657,33 +705,37 @@ export default function AjustesScreen() {
         </Modal>
       )}
 
-      {/* MODAL DIGITAÇÃO MANUAL SEFAZ COMPLETA */}
+      {/* MODAL DIGITAÇÃO MANUAL SEFAZ COMPLETA (AGORA NACIONAL) */}
       <Modal visible={modalSefazManual} transparent={true} animationType="fade">
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
           <View style={styles.modalContentCentral}>
             <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
               
               <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 10 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: color.text }}>Consulta Manual Sefaz</Text>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: color.text }}>Consulta Sefaz</Text>
                 <TouchableOpacity onPress={() => setModalSefazManual(false)}>
                   <Ionicons name="close-circle" size={28} color={color.textSecondary} />
                 </TouchableOpacity>
               </View>
 
-              <View style={{ width: '100%', flexDirection: 'row', marginBottom: 15 }}>
-                <TouchableOpacity 
-                  style={[styles.btnEstado, estadoSefaz === "MA" && { backgroundColor: color.tint, borderColor: color.tint }]} 
-                  onPress={() => setEstadoSefaz("MA")}
-                >
-                  <Text style={[styles.textoBtnEstado, estadoSefaz === "MA" && { color: 'white' }]}>Sefaz MA</Text>
-                </TouchableOpacity>
-                <View style={{ width: 10 }} />
-                <TouchableOpacity 
-                  style={[styles.btnEstado, estadoSefaz === "PI" && { backgroundColor: color.tint, borderColor: color.tint }]} 
-                  onPress={() => setEstadoSefaz("PI")}
-                >
-                  <Text style={[styles.textoBtnEstado, estadoSefaz === "PI" && { color: 'white' }]}>Sefaz PI</Text>
-                </TouchableOpacity>
+              {/* LISTA DINÂMICA DE TODOS OS ESTADOS (UFs) */}
+              <View style={{ width: '100%', marginBottom: 15 }}>
+                <Text style={styles.labelInputManual}>Selecione o seu Estado (UF)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                  {UFS.map((uf) => (
+                    <TouchableOpacity 
+                      key={uf}
+                      style={[
+                        styles.btnEstado, 
+                        estadoSefaz === uf && { backgroundColor: color.tint, borderColor: color.tint }, 
+                        { marginRight: 8, paddingHorizontal: 16, paddingVertical: 10 }
+                      ]} 
+                      onPress={() => setEstadoSefaz(uf)}
+                    >
+                      <Text style={[styles.textoBtnEstado, estadoSefaz === uf && { color: 'white' }]}>{uf}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
 
               <Text style={styles.labelInputManual}>Chave de Acesso (44 números)*</Text>
@@ -965,7 +1017,7 @@ const getStyles = (c: any) =>
     miraQrCode: { padding: 30, borderWidth: 4, borderColor: '#10B981', borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)' },
     modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", padding: 20, paddingVertical: 40 },
     modalContentCentral: { backgroundColor: c.card, borderRadius: 24, padding: 24, alignItems: "center", width: '100%', maxHeight: '90%' },
-    btnEstado: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: c.border },
+    btnEstado: { alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: c.border },
     textoBtnEstado: { color: c.textSecondary, fontWeight: 'bold' },
     labelInputManual: { fontSize: 12, fontWeight: "bold", color: c.textSecondary, marginBottom: 6, marginLeft: 4 },
     inputModalManual: { backgroundColor: c.background, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, fontSize: 15, color: c.text, borderWidth: 1, borderColor: c.border, marginBottom: 10 },

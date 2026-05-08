@@ -8,10 +8,12 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useColorScheme,
   View,
@@ -20,7 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "../../constants/Colors";
 import { turso } from "../../database";
-import { analisarHistoricoFinanceiro } from "../../services/iaService"; // 🔥 IA IMPORTADA
+import { analisarHistoricoFinanceiro } from "../../services/iaService";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useCartStore } from "../../store/useCartStore";
 import { useThemeStore } from "../../store/useThemeStore";
@@ -33,13 +35,14 @@ export default function HistoricoScreen() {
   const styles = useMemo(() => getStyles(color), [color]);
 
   const historicoGlobal = useCartStore((state) => state.historico);
-  const sincronizarComNuvem = useCartStore(
-    (state) => state.sincronizarComNuvem,
-  );
+  const sincronizarComNuvem = useCartStore((state) => state.sincronizarComNuvem);
   const familiaId = useAuthStore((state) => state.familiaId);
 
   const [loading, setLoading] = useState(false);
   const [mesOffset, setMesOffset] = useState(0);
+
+  // 🔥 ESTADO DA PESQUISA
+  const [busca, setBusca] = useState("");
 
   // 🔥 ESTADOS DO RECIBO DIGITAL
   const [reciboVisivel, setReciboVisivel] = useState(false);
@@ -60,10 +63,20 @@ export default function HistoricoScreen() {
   const mesQuery = `${String(dataCalc.getMonth() + 1).padStart(2, "0")}-${dataCalc.getFullYear()}`;
 
   const historicoMes = useMemo(() => {
-    return historicoGlobal.filter(
-      (item: any) => item.mes_referencia === mesQuery,
-    );
+    return historicoGlobal.filter((item: any) => item.mes_referencia === mesQuery);
   }, [historicoGlobal, mesQuery]);
+
+  // 🔥 LISTA FILTRADA PARA A PESQUISA
+  const historicoFiltrado = useMemo(() => {
+    if (!busca.trim()) return historicoMes;
+    
+    const textoBusca = busca.toLowerCase();
+    return historicoMes.filter((item: any) => 
+      (item.nome_produto && item.nome_produto.toLowerCase().includes(textoBusca)) ||
+      (item.supermercado && item.supermercado.toLowerCase().includes(textoBusca)) ||
+      (item.categoria && item.categoria.toLowerCase().includes(textoBusca))
+    );
+  }, [historicoMes, busca]);
 
   const { totalGastoMes, itemMaisCaro, resumoCategorias } = useMemo(() => {
     let total = 0;
@@ -73,24 +86,20 @@ export default function HistoricoScreen() {
     historicoMes.forEach((item) => {
       const preco = Number(item.preco_prateleira) || 0;
       total += preco;
-      if (!maisCaro || preco > Number(maisCaro.preco_prateleira))
-        maisCaro = item;
+      if (!maisCaro || preco > Number(maisCaro.preco_prateleira)) maisCaro = item;
       const cat = String(item.categoria || "Outros");
       if (categorias[cat]) categorias[cat] += preco;
       else categorias[cat] = preco;
     });
 
-    return {
-      totalGastoMes: total,
-      itemMaisCaro: maisCaro,
-      resumoCategorias: categorias,
-    };
+    return { totalGastoMes: total, itemMaisCaro: maisCaro, resumoCategorias: categorias };
   }, [historicoMes]);
 
   const navegarMes = (direcao: number) => {
     Haptics.selectionAsync();
     setMesOffset((prev) => prev + direcao);
-    setDicaIA(null); // Reseta a IA ao trocar de mês
+    setDicaIA(null); 
+    setBusca(""); // Limpa a pesquisa ao mudar de mês
   };
 
   useFocusEffect(
@@ -99,12 +108,10 @@ export default function HistoricoScreen() {
     }, []),
   );
 
-  // 🔥 FUNÇÃO: PEDIR CONSULTORIA PARA A IA
   const pedirConsultoriaIA = async () => {
     Haptics.selectionAsync();
     setLoadingIA(true);
     
-    // Prepara um resumo leve para a IA processar rápido
     const resumo = historicoMes.map((i: any) => `${i.nome_produto} (${i.categoria}): R$${i.preco_prateleira}`).join(' | ');
     
     const analise = await analisarHistoricoFinanceiro(resumo);
@@ -116,37 +123,28 @@ export default function HistoricoScreen() {
 
   const apagarHistoricoDoMes = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
-      "Atenção",
-      "Tem certeza que deseja apagar todos os recibos deste mês?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Apagar",
-          style: "destructive",
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await turso.execute({
-                sql: "DELETE FROM compras_historico WHERE mes_referencia = ? AND familia_id = ?",
-                args: [mesQuery, familiaId],
-              });
-              await sincronizarComNuvem();
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success,
-              );
-            } catch (error) {
-              Alert.alert(
-                "Sem Internet",
-                "Você precisa de conexão para apagar o histórico.",
-              );
-            } finally {
-              setLoading(false);
-            }
-          },
+    Alert.alert("Atenção", "Tem certeza que deseja apagar todos os recibos deste mês?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Apagar",
+        style: "destructive",
+        onPress: async () => {
+          setLoading(true);
+          try {
+            await turso.execute({
+              sql: "DELETE FROM compras_historico WHERE mes_referencia = ? AND familia_id = ?",
+              args: [mesQuery, familiaId],
+            });
+            await sincronizarComNuvem();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (error) {
+            Alert.alert("Sem Internet", "Você precisa de conexão para apagar o histórico.");
+          } finally {
+            setLoading(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const refazerCompra = async () => {
@@ -170,16 +168,10 @@ export default function HistoricoScreen() {
       });
 
       const novaLista = [...itensUnicos, ...checklistAtual];
-      await AsyncStorage.setItem(
-        "dehouse_checklist",
-        JSON.stringify(novaLista),
-      );
+      await AsyncStorage.setItem("dehouse_checklist", JSON.stringify(novaLista));
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        "Pronto!",
-        `${itensUnicos.length} itens foram enviados para a sua aba de Planejamento (Lista).`,
-      );
+      Alert.alert("Pronto!", `${itensUnicos.length} itens foram enviados para a sua aba de Planejamento (Lista).`);
     } catch (e) {
       Alert.alert("Erro", "Não foi possível copiar os itens.");
     }
@@ -192,16 +184,10 @@ export default function HistoricoScreen() {
   };
 
   const renderGraficoCategorias = () => {
-    const chaves = Object.keys(resumoCategorias).sort(
-      (a, b) => resumoCategorias[b] - resumoCategorias[a],
-    );
+    const chaves = Object.keys(resumoCategorias).sort((a, b) => resumoCategorias[b] - resumoCategorias[a]);
     if (chaves.length === 0) return null;
     const coresCat: Record<string, string> = {
-      Alimentação: "#FF7A00",
-      Limpeza: "#4DA8FF",
-      Higiene: "#2ED1B2",
-      Bebidas: "#9B51E0",
-      Outros: color.textSecondary,
+      Alimentação: "#FF7A00", Limpeza: "#4DA8FF", Higiene: "#2ED1B2", Bebidas: "#9B51E0", Outros: color.textSecondary,
     };
 
     return (
@@ -209,8 +195,7 @@ export default function HistoricoScreen() {
         <Text style={styles.tituloGrafico}>Análise de Gastos</Text>
         {chaves.map((cat) => {
           const valor = resumoCategorias[cat];
-          const porcentagem =
-            totalGastoMes > 0 ? (valor / totalGastoMes) * 100 : 0;
+          const porcentagem = totalGastoMes > 0 ? (valor / totalGastoMes) * 100 : 0;
           const corCat = coresCat[cat] || coresCat["Outros"];
 
           return (
@@ -218,19 +203,11 @@ export default function HistoricoScreen() {
               <View style={styles.infoGrafico}>
                 <Text style={styles.textoCat}>{cat}</Text>
                 <Text style={styles.textoValorCat}>
-                  R$ {valor.toFixed(2)}{" "}
-                  <Text style={{ fontSize: 10, color: color.textSecondary }}>
-                    ({porcentagem.toFixed(0)}%)
-                  </Text>
+                  R$ {valor.toFixed(2)} <Text style={{ fontSize: 10, color: color.textSecondary }}>({porcentagem.toFixed(0)}%)</Text>
                 </Text>
               </View>
               <View style={styles.barraFundoGrafico}>
-                <View
-                  style={[
-                    styles.barraPreenchidaGrafico,
-                    { width: `${porcentagem}%`, backgroundColor: corCat },
-                  ]}
-                />
+                <View style={[styles.barraPreenchidaGrafico, { width: `${porcentagem}%`, backgroundColor: corCat }]} />
               </View>
             </View>
           );
@@ -252,8 +229,7 @@ export default function HistoricoScreen() {
         <View style={styles.insightLinha}>
           <Text style={styles.insightLabel}>Produto mais caro:</Text>
           <Text style={styles.insightValor} numberOfLines={1}>
-            {itemMaisCaro.nome_produto} (R${" "}
-            {Number(itemMaisCaro.preco_prateleira).toFixed(2)})
+            {itemMaisCaro.nome_produto} (R$ {Number(itemMaisCaro.preco_prateleira).toFixed(2)})
           </Text>
         </View>
         <View style={styles.insightLinha}>
@@ -265,16 +241,9 @@ export default function HistoricoScreen() {
   };
 
   const renderItemHistorico = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.itemCompra}
-      onPress={() => abrirRecibo(item)}
-    >
+    <TouchableOpacity style={styles.itemCompra} onPress={() => abrirRecibo(item)}>
       <View style={styles.itemIcone}>
-        <Ionicons
-          name="receipt-outline"
-          size={20}
-          color={color.textSecondary}
-        />
+        <Ionicons name="receipt-outline" size={20} color={color.textSecondary} />
       </View>
       <View style={styles.itemDetalhes}>
         <Text style={styles.itemNome}>{item.nome_produto}</Text>
@@ -283,19 +252,12 @@ export default function HistoricoScreen() {
             {item.categoria} {item.supermercado ? `• ${item.supermercado}` : ""}
           </Text>
           {(item.foto_comprovante || item.foto_etiqueta) && (
-            <Ionicons
-              name="images"
-              size={14}
-              color={color.tint}
-              style={{ marginLeft: 6 }}
-            />
+            <Ionicons name="images" size={14} color={color.tint} style={{ marginLeft: 6 }} />
           )}
         </View>
       </View>
       <View style={styles.itemPrecoContainer}>
-        <Text style={styles.itemPreco}>
-          R$ {Number(item.preco_prateleira).toFixed(2)}
-        </Text>
+        <Text style={styles.itemPreco}>R$ {Number(item.preco_prateleira).toFixed(2)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -305,26 +267,46 @@ export default function HistoricoScreen() {
       <View style={styles.header}>
         <Text style={styles.tituloTela}>Histórico</Text>
         <View style={styles.seletorMes}>
-          <TouchableOpacity
-            onPress={() => navegarMes(-1)}
-            style={styles.btnNav}
-          >
+          <TouchableOpacity onPress={() => navegarMes(-1)} style={styles.btnNav}>
             <Ionicons name="chevron-back" size={20} color={color.text} />
           </TouchableOpacity>
-          <Text style={styles.subtituloTela}>
-            {mesOffset === 0 ? "Mês Atual" : mesVisual}
-          </Text>
-          <TouchableOpacity
-            onPress={() => navegarMes(1)}
-            style={styles.btnNav}
-            disabled={mesOffset >= 0}
-          >
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={mesOffset >= 0 ? color.border : color.text}
-            />
+          <Text style={styles.subtituloTela}>{mesOffset === 0 ? "Mês Atual" : mesVisual}</Text>
+          <TouchableOpacity onPress={() => navegarMes(1)} style={styles.btnNav} disabled={mesOffset >= 0}>
+            <Ionicons name="chevron-forward" size={20} color={mesOffset >= 0 ? color.border : color.text} />
           </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 🔥 BARRA DE PESQUISA ADICIONADA AQUI */}
+      <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: color.card,
+          borderRadius: 16,
+          paddingHorizontal: 12,
+          borderWidth: 1,
+          borderColor: busca ? color.tint : color.border,
+        }}>
+          <Ionicons name="search" size={20} color={busca ? color.tint : color.textSecondary} />
+          <TextInput
+            style={{
+              flex: 1,
+              paddingVertical: 14,
+              paddingHorizontal: 10,
+              color: color.text,
+              fontSize: 16,
+            }}
+            placeholder="Pesquisar produto, mercado..."
+            placeholderTextColor={color.textSecondary}
+            value={busca}
+            onChangeText={setBusca}
+          />
+          {busca.length > 0 && (
+            <TouchableOpacity onPress={() => { setBusca(""); Keyboard.dismiss(); }}>
+              <Ionicons name="close-circle" size={20} color={color.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -334,32 +316,24 @@ export default function HistoricoScreen() {
         </View>
       ) : (
         <FlatList
-          data={historicoMes}
-          keyExtractor={(item, index) =>
-            item.id ? String(item.id) : String(index)
-          }
+          data={historicoFiltrado} // 🔥 AGORA A LISTA É A FILTRADA
+          keyExtractor={(item, index) => item.id ? String(item.id) : String(index)}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listaContainer}
           ListHeaderComponent={() => (
             <View>
+              {/* Oculta os totais e gráficos se o utilizador estiver ativamente a pesquisar (opcional, mantive visível) */}
               <View style={styles.cardTotal}>
                 <View style={styles.cardHeaderTotal}>
-                  <Ionicons
-                    name="wallet-outline"
-                    size={20}
-                    color={color.textSecondary}
-                  />
+                  <Ionicons name="wallet-outline" size={20} color={color.textSecondary} />
                   <Text style={styles.labelTotal}>GASTO TOTAL DO MÊS</Text>
                 </View>
-                <Text style={styles.valorTotal}>
-                  R$ {totalGastoMes.toFixed(2)}
-                </Text>
+                <Text style={styles.valorTotal}>R$ {totalGastoMes.toFixed(2)}</Text>
               </View>
 
               {renderInsights()}
               {renderGraficoCategorias()}
 
-              {/* 🔥 ÁREA DO CONSULTOR IA (NOVO) */}
               {historicoMes.length > 0 && (
                 <View style={styles.cardIA}>
                   {!dicaIA && !loadingIA ? (
@@ -387,38 +361,18 @@ export default function HistoricoScreen() {
 
               <View style={styles.headerListaRecibos}>
                 <Text style={styles.tituloSecao}>
-                  Recibos ({historicoMes.length})
+                  {/* 🔥 MOSTRA A CONTAGEM DOS RESULTADOS FILTRADOS */}
+                  Recibos ({historicoFiltrado.length})
                 </Text>
 
                 {historicoMes.length > 0 && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 12,
-                      alignItems: "center",
-                    }}
-                  >
-                    <TouchableOpacity
-                      onPress={refazerCompra}
-                      style={styles.btnRefazer}
-                    >
+                  <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                    <TouchableOpacity onPress={refazerCompra} style={styles.btnRefazer}>
                       <Ionicons name="refresh" size={16} color="white" />
-                      <Text
-                        style={{
-                          color: "white",
-                          fontWeight: "bold",
-                          fontSize: 12,
-                        }}
-                      >
-                        Refazer Compra
-                      </Text>
+                      <Text style={{ color: "white", fontWeight: "bold", fontSize: 12 }}>Refazer Compra</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={apagarHistoricoDoMes}>
-                      <Ionicons
-                        name="trash-outline"
-                        size={22}
-                        color={color.danger}
-                      />
+                      <Ionicons name="trash-outline" size={22} color={color.danger} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -428,14 +382,12 @@ export default function HistoricoScreen() {
           renderItem={renderItemHistorico}
           ListEmptyComponent={() => (
             <View style={styles.emptyState}>
-              <Ionicons
-                name="folder-open-outline"
-                size={60}
-                color={color.borderDark}
-              />
-              <Text style={styles.textoVazio}>Nenhum registro encontrado.</Text>
+              <Ionicons name={busca ? "search-outline" : "folder-open-outline"} size={60} color={color.borderDark} />
+              <Text style={styles.textoVazio}>
+                {busca ? "Nenhum resultado encontrado." : "Nenhum registro encontrado."}
+              </Text>
               <Text style={styles.subtextoVazio}>
-                As compras finalizadas aparecerão aqui.
+                {busca ? "Tente pesquisar por outro nome ou categoria." : "As compras finalizadas aparecerão aqui."}
               </Text>
             </View>
           )}
@@ -443,102 +395,48 @@ export default function HistoricoScreen() {
       )}
 
       {/* MODAL DO RECIBO DIGITAL */}
-      <Modal
-        visible={reciboVisivel}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setReciboVisivel(false)}
-      >
+      <Modal visible={reciboVisivel} animationType="slide" transparent={true} onRequestClose={() => setReciboVisivel(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.reciboPapel}>
             <View style={styles.reciboHeader}>
-              <Ionicons
-                name="checkmark-circle"
-                size={40}
-                color="#2ED1B2"
-                style={{ marginBottom: 10 }}
-              />
+              <Ionicons name="checkmark-circle" size={40} color="#2ED1B2" style={{ marginBottom: 10 }} />
               <Text style={styles.reciboTitulo}>Comprovante Dehouse</Text>
-              <Text style={styles.reciboMercado}>
-                {compraSelecionada?.supermercado || "Mercado"}
-              </Text>
+              <Text style={styles.reciboMercado}>{compraSelecionada?.supermercado || "Mercado"}</Text>
             </View>
 
             <View style={styles.reciboDivisor} />
 
-            <View style={styles.reciboRow}>
-              <Text style={styles.reciboLabel}>Produto:</Text>
-              <Text style={styles.reciboValor}>
-                {compraSelecionada?.nome_produto}
-              </Text>
-            </View>
-            <View style={styles.reciboRow}>
-              <Text style={styles.reciboLabel}>Categoria:</Text>
-              <Text style={styles.reciboValor}>
-                {compraSelecionada?.categoria}
-              </Text>
-            </View>
-            <View style={styles.reciboRow}>
-              <Text style={styles.reciboLabel}>Código:</Text>
-              <Text style={styles.reciboValor}>
-                {compraSelecionada?.codigo_barras || "Sem código"}
-              </Text>
-            </View>
-            <View style={styles.reciboRow}>
-              <Text style={styles.reciboLabel}>Mês Fiscal:</Text>
-              <Text style={styles.reciboValor}>
-                {compraSelecionada?.mes_referencia}
-              </Text>
-            </View>
+            <View style={styles.reciboRow}><Text style={styles.reciboLabel}>Produto:</Text><Text style={styles.reciboValor}>{compraSelecionada?.nome_produto}</Text></View>
+            <View style={styles.reciboRow}><Text style={styles.reciboLabel}>Categoria:</Text><Text style={styles.reciboValor}>{compraSelecionada?.categoria}</Text></View>
+            <View style={styles.reciboRow}><Text style={styles.reciboLabel}>Código:</Text><Text style={styles.reciboValor}>{compraSelecionada?.codigo_barras || "Sem código"}</Text></View>
+            <View style={styles.reciboRow}><Text style={styles.reciboLabel}>Mês Fiscal:</Text><Text style={styles.reciboValor}>{compraSelecionada?.mes_referencia}</Text></View>
 
             <View style={styles.reciboDivisor} />
 
             <View style={styles.reciboRowTotal}>
               <Text style={styles.reciboTotalLabel}>VALOR PAGO</Text>
-              <Text style={styles.reciboTotalValor}>
-                R$ {Number(compraSelecionada?.preco_prateleira || 0).toFixed(2)}
-              </Text>
+              <Text style={styles.reciboTotalValor}>R$ {Number(compraSelecionada?.preco_prateleira || 0).toFixed(2)}</Text>
             </View>
 
-            {(compraSelecionada?.foto_comprovante ||
-              compraSelecionada?.foto_etiqueta) && (
+            {(compraSelecionada?.foto_comprovante || compraSelecionada?.foto_etiqueta) && (
               <View style={styles.fotosContainer}>
-                <Text style={styles.reciboLabelAnexos}>
-                  ANEXOS FOTOGRÁFICOS
-                </Text>
+                <Text style={styles.reciboLabelAnexos}>ANEXOS FOTOGRÁFICOS</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {compraSelecionada?.foto_comprovante && (
-                    <TouchableOpacity
-                      onPress={() =>
-                        setFotoAmpliada(compraSelecionada.foto_comprovante)
-                      }
-                    >
-                      <Image
-                        source={{ uri: compraSelecionada.foto_comprovante }}
-                        style={styles.fotoRecibo}
-                      />
+                    <TouchableOpacity onPress={() => setFotoAmpliada(compraSelecionada.foto_comprovante)}>
+                      <Image source={{ uri: compraSelecionada.foto_comprovante }} style={styles.fotoRecibo} />
                     </TouchableOpacity>
                   )}
                   {compraSelecionada?.foto_etiqueta && (
-                    <TouchableOpacity
-                      onPress={() =>
-                        setFotoAmpliada(compraSelecionada.foto_etiqueta)
-                      }
-                    >
-                      <Image
-                        source={{ uri: compraSelecionada.foto_etiqueta }}
-                        style={styles.fotoRecibo}
-                      />
+                    <TouchableOpacity onPress={() => setFotoAmpliada(compraSelecionada.foto_etiqueta)}>
+                      <Image source={{ uri: compraSelecionada.foto_etiqueta }} style={styles.fotoRecibo} />
                     </TouchableOpacity>
                   )}
                 </ScrollView>
               </View>
             )}
 
-            <TouchableOpacity
-              style={styles.btnFecharRecibo}
-              onPress={() => setReciboVisivel(false)}
-            >
+            <TouchableOpacity style={styles.btnFecharRecibo} onPress={() => setReciboVisivel(false)}>
               <Text style={styles.btnFecharTexto}>Fechar Recibo</Text>
             </TouchableOpacity>
           </View>
@@ -546,25 +444,12 @@ export default function HistoricoScreen() {
       </Modal>
 
       {/* MODAL PARA AMPLIAR A FOTO DO RECIBO */}
-      <Modal
-        visible={fotoAmpliada !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setFotoAmpliada(null)}
-      >
+      <Modal visible={fotoAmpliada !== null} transparent={true} animationType="fade" onRequestClose={() => setFotoAmpliada(null)}>
         <View style={styles.fullScreenImageContainer}>
-          <TouchableOpacity
-            style={styles.btnFecharImagem}
-            onPress={() => setFotoAmpliada(null)}
-          >
+          <TouchableOpacity style={styles.btnFecharImagem} onPress={() => setFotoAmpliada(null)}>
             <Ionicons name="close-circle" size={40} color="white" />
           </TouchableOpacity>
-          {fotoAmpliada && (
-            <Image
-              source={{ uri: fotoAmpliada }}
-              style={styles.fullScreenImage}
-            />
-          )}
+          {fotoAmpliada && <Image source={{ uri: fotoAmpliada }} style={styles.fullScreenImage} />}
         </View>
       </Modal>
     </SafeAreaView>
@@ -575,288 +460,73 @@ const getStyles = (c: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: 20,
-      paddingTop: 10,
-    },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 10 },
     tituloTela: { fontSize: 28, fontWeight: "bold", color: c.text },
-    seletorMes: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: c.card,
-      borderRadius: 20,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
+    seletorMes: { flexDirection: "row", alignItems: "center", backgroundColor: c.card, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: c.border },
     btnNav: { padding: 4 },
-    subtituloTela: {
-      fontSize: 13,
-      color: c.text,
-      fontWeight: "bold",
-      marginHorizontal: 8,
-      minWidth: 70,
-      textAlign: "center",
-    },
+    subtituloTela: { fontSize: 13, color: c.text, fontWeight: "bold", marginHorizontal: 8, minWidth: 70, textAlign: "center" },
 
     listaContainer: { paddingHorizontal: 16, paddingBottom: 40 },
-    cardTotal: {
-      backgroundColor: c.card,
-      padding: 20,
-      borderRadius: 20,
-      elevation: 2,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    cardHeaderTotal: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 8,
-    },
-    labelTotal: {
-      fontSize: 12,
-      fontWeight: "bold",
-      color: c.textSecondary,
-      marginLeft: 8,
-      letterSpacing: 0.5,
-    },
-    valorTotal: {
-      fontSize: 36,
-      fontWeight: "900",
-      color: c.danger,
-      letterSpacing: -1,
-    },
+    cardTotal: { backgroundColor: c.card, padding: 20, borderRadius: 20, elevation: 2, marginBottom: 16, borderWidth: 1, borderColor: c.border },
+    cardHeaderTotal: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+    labelTotal: { fontSize: 12, fontWeight: "bold", color: c.textSecondary, marginLeft: 8, letterSpacing: 0.5 },
+    valorTotal: { fontSize: 36, fontWeight: "900", color: c.danger, letterSpacing: -1 },
 
-    // 🔥 ESTILOS DA IA ADCIONADOS
     cardIA: { backgroundColor: c.card, borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#10B981', overflow: 'hidden' },
     btnPedirIA: { flexDirection: 'row', backgroundColor: '#10B981', padding: 16, justifyContent: 'center', alignItems: 'center' },
     txtPedirIA: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
 
-    cardInsight: {
-      backgroundColor: c.background,
-      padding: 16,
-      borderRadius: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: "#FFC857",
-      borderStyle: "dashed",
-    },
-    insightHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 12,
-    },
-    insightTitulo: {
-      color: c.text,
-      fontWeight: "bold",
-      marginLeft: 6,
-      fontSize: 14,
-    },
-    insightLinha: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginBottom: 6,
-      alignItems: "center",
-    },
+    cardInsight: { backgroundColor: c.background, padding: 16, borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: "#FFC857", borderStyle: "dashed" },
+    insightHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+    insightTitulo: { color: c.text, fontWeight: "bold", marginLeft: 6, fontSize: 14 },
+    insightLinha: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6, alignItems: "center" },
     insightLabel: { color: c.textSecondary, fontSize: 12 },
-    insightValor: {
-      color: c.text,
-      fontWeight: "bold",
-      fontSize: 13,
-      flex: 1,
-      textAlign: "right",
-      marginLeft: 10,
-    },
+    insightValor: { color: c.text, fontWeight: "bold", fontSize: 13, flex: 1, textAlign: "right", marginLeft: 10 },
 
-    cardGrafico: {
-      backgroundColor: c.card,
-      padding: 20,
-      borderRadius: 20,
-      elevation: 2,
-      marginBottom: 24,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    tituloGrafico: {
-      fontSize: 16,
-      fontWeight: "bold",
-      color: c.text,
-      marginBottom: 16,
-    },
+    cardGrafico: { backgroundColor: c.card, padding: 20, borderRadius: 20, elevation: 2, marginBottom: 24, borderWidth: 1, borderColor: c.border },
+    tituloGrafico: { fontSize: 16, fontWeight: "bold", color: c.text, marginBottom: 16 },
     linhaGrafico: { marginBottom: 12 },
-    infoGrafico: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginBottom: 6,
-    },
+    infoGrafico: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
     textoCat: { fontSize: 13, fontWeight: "600", color: c.text },
     textoValorCat: { fontSize: 13, fontWeight: "bold", color: c.textSecondary },
-    barraFundoGrafico: {
-      height: 6,
-      backgroundColor: c.border,
-      borderRadius: 3,
-      overflow: "hidden",
-    },
+    barraFundoGrafico: { height: 6, backgroundColor: c.border, borderRadius: 3, overflow: "hidden" },
     barraPreenchidaGrafico: { height: "100%", borderRadius: 3 },
 
-    headerListaRecibos: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12,
-    },
+    headerListaRecibos: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
     tituloSecao: { fontSize: 18, fontWeight: "bold", color: c.text },
-    btnRefazer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: c.info,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 12,
-      gap: 4,
-    },
+    btnRefazer: { flexDirection: "row", alignItems: "center", backgroundColor: c.info, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, gap: 4 },
 
-    itemCompra: {
-      flexDirection: "row",
-      backgroundColor: c.card,
-      padding: 16,
-      borderRadius: 16,
-      marginBottom: 10,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    itemIcone: {
-      width: 40,
-      height: 40,
-      borderRadius: 10,
-      backgroundColor: c.background,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 12,
-    },
+    itemCompra: { flexDirection: "row", backgroundColor: c.card, padding: 16, borderRadius: 16, marginBottom: 10, alignItems: "center", borderWidth: 1, borderColor: c.border },
+    itemIcone: { width: 40, height: 40, borderRadius: 10, backgroundColor: c.background, justifyContent: "center", alignItems: "center", marginRight: 12 },
     itemDetalhes: { flex: 1 },
-    itemNome: {
-      fontSize: 15,
-      fontWeight: "bold",
-      color: c.text,
-      marginBottom: 4,
-    },
+    itemNome: { fontSize: 15, fontWeight: "bold", color: c.text, marginBottom: 4 },
     itemCategoria: { fontSize: 12, color: c.tint, fontWeight: "600" },
     itemPrecoContainer: { alignItems: "flex-end" },
     itemPreco: { fontSize: 16, fontWeight: "800", color: c.text },
 
     emptyState: { alignItems: "center", marginTop: 40, paddingHorizontal: 20 },
-    textoVazio: {
-      color: c.text,
-      fontSize: 16,
-      fontWeight: "bold",
-      marginTop: 12,
-      textAlign: "center",
-    },
-    subtextoVazio: {
-      color: c.textSecondary,
-      fontSize: 14,
-      marginTop: 6,
-      textAlign: "center",
-    },
+    textoVazio: { color: c.text, fontSize: 16, fontWeight: "bold", marginTop: 12, textAlign: "center" },
+    subtextoVazio: { color: c.textSecondary, fontSize: 14, marginTop: 6, textAlign: "center" },
 
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.6)",
-      justifyContent: "center",
-      padding: 20,
-    },
-    reciboPapel: {
-      backgroundColor: "#FFFFFF",
-      borderRadius: 12,
-      padding: 24,
-      elevation: 10,
-    },
+    modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: 20 },
+    reciboPapel: { backgroundColor: "#FFFFFF", borderRadius: 12, padding: 24, elevation: 10 },
     reciboHeader: { alignItems: "center", marginBottom: 20 },
-    reciboTitulo: {
-      fontSize: 18,
-      fontWeight: "bold",
-      color: "#1E1E1E",
-      textTransform: "uppercase",
-      letterSpacing: 1,
-    },
+    reciboTitulo: { fontSize: 18, fontWeight: "bold", color: "#1E1E1E", textTransform: "uppercase", letterSpacing: 1 },
     reciboMercado: { fontSize: 14, color: "#666", marginTop: 4 },
-    reciboDivisor: {
-      height: 1,
-      width: "100%",
-      borderWidth: 1,
-      borderColor: "#E5E7EB",
-      borderStyle: "dashed",
-      marginVertical: 16,
-    },
-    reciboRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginBottom: 10,
-    },
+    reciboDivisor: { height: 1, width: "100%", borderWidth: 1, borderColor: "#E5E7EB", borderStyle: "dashed", marginVertical: 16 },
+    reciboRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
     reciboLabel: { fontSize: 14, color: "#666" },
-    reciboValor: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: "#1E1E1E",
-      maxWidth: "60%",
-      textAlign: "right",
-    },
-    reciboRowTotal: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginVertical: 10,
-    },
+    reciboValor: { fontSize: 14, fontWeight: "600", color: "#1E1E1E", maxWidth: "60%", textAlign: "right" },
+    reciboRowTotal: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 10 },
     reciboTotalLabel: { fontSize: 16, fontWeight: "bold", color: "#1E1E1E" },
     reciboTotalValor: { fontSize: 24, fontWeight: "900", color: "#1E1E1E" },
-    fotosContainer: {
-      marginTop: 20,
-      backgroundColor: "#F3F4F6",
-      padding: 16,
-      borderRadius: 12,
-    },
-    reciboLabelAnexos: {
-      fontSize: 12,
-      fontWeight: "bold",
-      color: "#666",
-      marginBottom: 10,
-    },
-    fotoRecibo: {
-      width: 80,
-      height: 80,
-      borderRadius: 8,
-      marginRight: 10,
-      borderWidth: 1,
-      borderColor: "#D1D5DB",
-    },
-    btnFecharRecibo: {
-      backgroundColor: "#1E1E1E",
-      padding: 16,
-      borderRadius: 12,
-      alignItems: "center",
-      marginTop: 24,
-    },
+    fotosContainer: { marginTop: 20, backgroundColor: "#F3F4F6", padding: 16, borderRadius: 12 },
+    reciboLabelAnexos: { fontSize: 12, fontWeight: "bold", color: "#666", marginBottom: 10 },
+    fotoRecibo: { width: 80, height: 80, borderRadius: 8, marginRight: 10, borderWidth: 1, borderColor: "#D1D5DB" },
+    btnFecharRecibo: { backgroundColor: "#1E1E1E", padding: 16, borderRadius: 12, alignItems: "center", marginTop: 24 },
     btnFecharTexto: { color: "#FFFFFF", fontWeight: "bold", fontSize: 16 },
 
-    fullScreenImageContainer: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.9)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    btnFecharImagem: {
-      position: "absolute",
-      top: 50,
-      right: 20,
-      zIndex: 10,
-      padding: 10,
-    },
+    fullScreenImageContainer: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", justifyContent: "center", alignItems: "center" },
+    btnFecharImagem: { position: "absolute", top: 50, right: 20, zIndex: 10, padding: 10 },
     fullScreenImage: { width: "100%", height: "80%", resizeMode: "contain" },
   });
