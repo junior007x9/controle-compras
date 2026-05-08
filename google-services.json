@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:983322953388:android:3f0b02baef3832d56ac109",
+        "android_client_info": {
+          "package_name": "com.detech.dehousemarket"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "983322953388-1mb5pquf9oimaga5mr85juk4j8sf1an7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjT4dpAsHbwrK8YJteBXx_0e-oIi8knz8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "983322953388-1mb5pquf9oimaga5mr85juk4j8sf1an7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:983322953388:android:073ff2ce5644442e6ac109",
         "android_client_info": {
           "package_name": "com.seu.nome.controlecompras"
@@ -19,6 +48,14 @@
           "android_info": {
             "package_name": "com.seu.nome.controlecompras",
             "certificate_hash": "957b83accdc14a152690308570ccdf78347f7f6d"
+          }
+        },
+        {
+          "client_id": "983322953388-5c1c3dniql7up89rpvlnu10jol2ul9c8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.seu.nome.controlecompras",
+            "certificate_hash": "7d2894ca8362b93b33db98ade22e449adc94224c"
           }
         },
         {

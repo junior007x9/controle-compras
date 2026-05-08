@@ -28,14 +28,16 @@
         }
       ],
       "@react-native-google-signin/google-signin",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.seu.nome.controlecompras",
+      "package": "com.detech.dehousemarket",
+      "versionCode": 1,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",

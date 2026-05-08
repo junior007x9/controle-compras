@@ -20,12 +20,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "../../constants/Colors";
 import { turso } from "../../database";
+import { analisarHistoricoFinanceiro } from "../../services/iaService"; // 🔥 IA IMPORTADA
 import { useAuthStore } from "../../store/useAuthStore";
 import { useCartStore } from "../../store/useCartStore";
-import { useThemeStore } from "../../store/useThemeStore"; // 🔥 IMPORTA O TEMA
+import { useThemeStore } from "../../store/useThemeStore";
 
 export default function HistoricoScreen() {
-  // 🔥 GESTÃO DE TEMA ATUALIZADA
   const systemTheme = useColorScheme() ?? "light";
   const { temaAtivo } = useThemeStore();
   const theme = temaAtivo === "system" ? systemTheme : temaAtivo;
@@ -45,6 +45,10 @@ export default function HistoricoScreen() {
   const [reciboVisivel, setReciboVisivel] = useState(false);
   const [compraSelecionada, setCompraSelecionada] = useState<any>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
+
+  // 🔥 ESTADOS DA INTELIGÊNCIA FINANCEIRA (GROQ)
+  const [dicaIA, setDicaIA] = useState<{ insight?: string; dica?: string } | null>(null);
+  const [loadingIA, setLoadingIA] = useState(false);
 
   const dataCalc = useMemo(() => {
     const d = new Date();
@@ -86,6 +90,7 @@ export default function HistoricoScreen() {
   const navegarMes = (direcao: number) => {
     Haptics.selectionAsync();
     setMesOffset((prev) => prev + direcao);
+    setDicaIA(null); // Reseta a IA ao trocar de mês
   };
 
   useFocusEffect(
@@ -93,6 +98,21 @@ export default function HistoricoScreen() {
       sincronizarComNuvem();
     }, []),
   );
+
+  // 🔥 FUNÇÃO: PEDIR CONSULTORIA PARA A IA
+  const pedirConsultoriaIA = async () => {
+    Haptics.selectionAsync();
+    setLoadingIA(true);
+    
+    // Prepara um resumo leve para a IA processar rápido
+    const resumo = historicoMes.map((i: any) => `${i.nome_produto} (${i.categoria}): R$${i.preco_prateleira}`).join(' | ');
+    
+    const analise = await analisarHistoricoFinanceiro(resumo);
+    if(analise) setDicaIA(analise);
+    else Alert.alert("Ops", "A IA não conseguiu processar os dados agora.");
+    
+    setLoadingIA(false);
+  };
 
   const apagarHistoricoDoMes = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -227,7 +247,7 @@ export default function HistoricoScreen() {
       <View style={styles.cardInsight}>
         <View style={styles.insightHeader}>
           <Ionicons name="bulb" size={20} color="#FFC857" />
-          <Text style={styles.insightTitulo}>Inteligência Financeira</Text>
+          <Text style={styles.insightTitulo}>Resumo Factual do Mês</Text>
         </View>
         <View style={styles.insightLinha}>
           <Text style={styles.insightLabel}>Produto mais caro:</Text>
@@ -244,7 +264,6 @@ export default function HistoricoScreen() {
     );
   };
 
-  // 🔥 RENDERIZAÇÃO DO ITEM ATUALIZADA PARA SER CLICÁVEL E MOSTRAR ÍCONE DE FOTO
   const renderItemHistorico = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.itemCompra}
@@ -340,6 +359,32 @@ export default function HistoricoScreen() {
               {renderInsights()}
               {renderGraficoCategorias()}
 
+              {/* 🔥 ÁREA DO CONSULTOR IA (NOVO) */}
+              {historicoMes.length > 0 && (
+                <View style={styles.cardIA}>
+                  {!dicaIA && !loadingIA ? (
+                    <TouchableOpacity style={styles.btnPedirIA} onPress={pedirConsultoriaIA}>
+                      <Ionicons name="sparkles" size={24} color="#FFD700" />
+                      <Text style={styles.txtPedirIA}>Consultor IA Dehouse</Text>
+                    </TouchableOpacity>
+                  ) : loadingIA ? (
+                    <View style={{ padding: 15, alignItems: 'center' }}>
+                      <ActivityIndicator color="#10B981" />
+                      <Text style={{ color: color.textSecondary, marginTop: 10 }}>Analisando padrão de gastos...</Text>
+                    </View>
+                  ) : (
+                    <View style={{ padding: 15 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                        <Ionicons name="analytics" size={20} color="#10B981" />
+                        <Text style={{ color: color.text, fontWeight: 'bold', marginLeft: 8 }}>Análise Inteligente</Text>
+                      </View>
+                      <Text style={{ color: color.text, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>"{dicaIA?.insight}"</Text>
+                      <Text style={{ color: color.textSecondary, fontSize: 13, lineHeight: 20 }}>💡 Dica: {dicaIA?.dica}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               <View style={styles.headerListaRecibos}>
                 <Text style={styles.tituloSecao}>
                   Recibos ({historicoMes.length})
@@ -397,7 +442,7 @@ export default function HistoricoScreen() {
         />
       )}
 
-      {/* 🔥 MODAL DO RECIBO DIGITAL */}
+      {/* MODAL DO RECIBO DIGITAL */}
       <Modal
         visible={reciboVisivel}
         animationType="slide"
@@ -455,7 +500,6 @@ export default function HistoricoScreen() {
               </Text>
             </View>
 
-            {/* SE HOUVER FOTOS (PRODUTO OU ETIQUETA) */}
             {(compraSelecionada?.foto_comprovante ||
               compraSelecionada?.foto_etiqueta) && (
               <View style={styles.fotosContainer}>
@@ -501,7 +545,7 @@ export default function HistoricoScreen() {
         </View>
       </Modal>
 
-      {/* 🔥 MODAL PARA AMPLIAR A FOTO DO RECIBO */}
+      {/* MODAL PARA AMPLIAR A FOTO DO RECIBO */}
       <Modal
         visible={fotoAmpliada !== null}
         transparent={true}
@@ -587,6 +631,11 @@ const getStyles = (c: any) =>
       color: c.danger,
       letterSpacing: -1,
     },
+
+    // 🔥 ESTILOS DA IA ADCIONADOS
+    cardIA: { backgroundColor: c.card, borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#10B981', overflow: 'hidden' },
+    btnPedirIA: { flexDirection: 'row', backgroundColor: '#10B981', padding: 16, justifyContent: 'center', alignItems: 'center' },
+    txtPedirIA: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
 
     cardInsight: {
       backgroundColor: c.background,
@@ -717,7 +766,6 @@ const getStyles = (c: any) =>
       textAlign: "center",
     },
 
-    // ESTILOS DO RECIBO
     modalBackdrop: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.6)",

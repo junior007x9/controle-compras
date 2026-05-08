@@ -5,12 +5,17 @@ import React, { useEffect, useState } from "react";
 import { useColorScheme } from "react-native";
 import { Colors } from "../../constants/Colors";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useThemeStore } from "../../store/useThemeStore"; // 🔥 TEMA GLOBAL ADICIONADO
 
 // 🔥 1. MANTEMOS O CONGELAMENTO AQUI (POR SEGURANÇA)
 SplashScreen.preventAutoHideAsync();
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  // 🔥 GESTÃO DE TEMA ATUALIZADA
+  const systemTheme = useColorScheme() ?? "light";
+  const { temaAtivo } = useThemeStore();
+  const theme = temaAtivo === "system" ? systemTheme : temaAtivo;
+  const color = Colors[theme];
 
   // 🔥 2. ESTADO DE PRONTIDÃO: Começa como falso
   const [isReady, setIsReady] = useState(false);
@@ -54,11 +59,14 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        tabBarActiveTintColor: color.tint, // 🔥 Usa a cor principal do seu tema
+        tabBarInactiveTintColor: color.textSecondary, // 🔥 Cor dos ícones inativos
         headerShown: false,
         tabBarStyle: {
-          // Se não estiver logado, a barra de baixo desaparece
           display: isLogado ? "flex" : "none",
+          backgroundColor: color.card, // 🔥 Fundo da barra obedece ao Modo Escuro/Claro
+          borderTopColor: color.border, // 🔥 Linha divisória sutil adaptável
+          elevation: 0, // Remove a sombra genérica no Android para um visual mais limpo e flat
         },
       }}
     >
@@ -74,7 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="lista"
         options={{
-          title: "Lista",
+          title: "Planejar", // 🔥 Mudei de "Lista" para "Planejar" para ficar mais premium e combinar com o título da tela
           tabBarIcon: ({ color }) => (
             <Ionicons name="list" size={24} color={color} />
           ),

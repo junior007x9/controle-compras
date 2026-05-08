@@ -3,8 +3,11 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,46 +18,26 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
 import { Colors } from "../../constants/Colors";
 import { turso } from "../../database";
-import { useThemeStore } from "../../store/useThemeStore"; // 🔥 TEMA ADICIONADO AQUI
+import { categorizarCompraComIA } from "../../services/iaService";
+import { useThemeStore } from "../../store/useThemeStore";
 
 const CATEGORIAS = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 
+// 🔥 DICIONÁRIO INTELIGENTE: Rápido, local e sem custo.
 const DICIONARIO_INTELIGENTE: Record<string, string[]> = {
   Limpeza: [
-    "sabão",
-    "detergente",
-    "amaciante",
-    "desinfetante",
-    "esponja",
-    "vassoura",
-    "rodo",
-    "saco",
-    "lixo",
-    "cloro",
-    "água sanitária",
+    "sabão", "detergente", "amaciante", "desinfetante", "esponja",
+    "vassoura", "rodo", "saco", "lixo", "cloro", "água sanitária", "desengordurante"
   ],
   Higiene: [
-    "shampoo",
-    "condicionador",
-    "sabonete",
-    "pasta",
-    "escova",
-    "desodorante",
-    "papel higiênico",
-    "absorvente",
-    "barbeador",
+    "shampoo", "condicionador", "sabonete", "pasta", "escova",
+    "desodorante", "papel higiênico", "absorvente", "barbeador", "fio dental"
   ],
   Bebidas: [
-    "leite",
-    "café",
-    "refrigerante",
-    "suco",
-    "água",
-    "cerveja",
-    "vinho",
-    "chá",
+    "leite", "café", "refrigerante", "suco", "água", "cerveja", "vinho", "chá", "energético"
   ],
 };
 
@@ -66,7 +49,6 @@ interface ChecklistItem {
 }
 
 export default function ListaScreen() {
-  // 🔥 GESTÃO DE TEMA ATUALIZADA
   const systemTheme = useColorScheme() ?? "light";
   const { temaAtivo } = useThemeStore();
   const theme = temaAtivo === "system" ? systemTheme : temaAtivo;
@@ -77,7 +59,8 @@ export default function ListaScreen() {
   const [categoriaAtual, setCategoriaAtual] = useState("Alimentação");
   const [lista, setLista] = useState<ChecklistItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-
+  
+  const [isPensando, setIsPensando] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const sincronizarListaDaNuvem = async () => {
@@ -95,7 +78,7 @@ export default function ListaScreen() {
       }));
       setLista(listaFormatada);
     } catch (e) {
-      console.log("Erro ao sincronizar", e);
+      console.log("Erro ao sincronizar checklist", e);
     }
   };
 
@@ -106,48 +89,76 @@ export default function ListaScreen() {
   );
 
   const onRefresh = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRefreshing(true);
     await sincronizarListaDaNuvem();
     setRefreshing(false);
   };
 
+  // 🔥 LÓGICA DO DICIONÁRIO EM TEMPO REAL
   const handleMudancaTexto = (texto: string) => {
     setNovoItem(texto);
     const textoMinusculo = texto.toLowerCase();
 
-    for (const [categoria, palavras] of Object.entries(
-      DICIONARIO_INTELIGENTE,
-    )) {
+    let categoriaEncontrada = "";
+    for (const [categoria, palavras] of Object.entries(DICIONARIO_INTELIGENTE)) {
       if (palavras.some((palavra) => textoMinusculo.includes(palavra))) {
-        setCategoriaAtual(categoria);
-        return;
+        categoriaEncontrada = categoria;
+        break;
       }
     }
-    if (texto === "") setCategoriaAtual("Alimentação");
+
+    if (categoriaEncontrada) {
+      setCategoriaAtual(categoriaEncontrada);
+    } else if (texto === "") {
+      setCategoriaAtual("Alimentação");
+    }
   };
 
   const adicionarItem = async () => {
     if (novoItem.trim() === "") return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Keyboard.dismiss();
+
+    let categoriaDefinida = categoriaAtual;
+    const nomeLimpo = novoItem.trim();
+
+    // Verifica se a palavra está no dicionário local
+    const dicionarioAchou = Object.values(DICIONARIO_INTELIGENTE).some(palavras =>
+      palavras.some(p => nomeLimpo.toLowerCase().includes(p))
+    );
+
+    // Se não achou localmente, chama a IA
+    if (!dicionarioAchou) {
+      setIsPensando(true);
+      const resultadoIA = await categorizarCompraComIA(`Vou colocar na minha lista de compras: ${nomeLimpo}`);
+      
+      if (resultadoIA?.categoria && CATEGORIAS.includes(resultadoIA.categoria)) {
+        categoriaDefinida = resultadoIA.categoria;
+      }
+      setIsPensando(false);
+    }
 
     const item: ChecklistItem = {
       id: Date.now().toString(),
-      nome: novoItem.trim(),
-      categoria: categoriaAtual,
+      nome: nomeLimpo,
+      categoria: categoriaDefinida,
       comprado: false,
     };
 
-    setLista([item, ...lista]); // Atualiza ecrã rápido
+    // Atualização otimista na UI
+    setLista((prev) => [item, ...prev]); 
     setNovoItem("");
-    setCategoriaAtual("Alimentação");
-    Keyboard.dismiss();
+    setCategoriaAtual(categoriaDefinida); 
 
     try {
       await turso.execute({
         sql: "INSERT INTO checklist (id, nome, categoria, comprado) VALUES (?, ?, ?, ?)",
         args: [item.id, item.nome, item.categoria, 0],
       });
-    } catch (e) {}
+    } catch (e) {
+      console.log("Erro ao salvar item", e);
+    }
   };
 
   const alternarComprado = async (id: string) => {
@@ -156,8 +167,8 @@ export default function ListaScreen() {
     if (!item) return;
     const novoEstado = !item.comprado;
 
-    setLista(
-      lista.map((i) => (i.id === id ? { ...i, comprado: novoEstado } : i)),
+    setLista((prev) => 
+      prev.map((i) => (i.id === id ? { ...i, comprado: novoEstado } : i))
     );
 
     try {
@@ -165,26 +176,32 @@ export default function ListaScreen() {
         sql: "UPDATE checklist SET comprado = ? WHERE id = ?",
         args: [novoEstado ? 1 : 0, id],
       });
-    } catch (e) {}
+    } catch (e) {
+      console.log("Erro ao atualizar item", e);
+    }
   };
 
   const removerItem = async (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setLista(lista.filter((item) => item.id !== id));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setLista((prev) => prev.filter((item) => item.id !== id));
     try {
       await turso.execute({
         sql: "DELETE FROM checklist WHERE id = ?",
         args: [id],
       });
-    } catch (e) {}
+    } catch (e) {
+      console.log("Erro ao remover item", e);
+    }
   };
 
   const limparComprados = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setLista(lista.filter((item) => !item.comprado));
+    setLista((prev) => prev.filter((item) => !item.comprado));
     try {
       await turso.execute("DELETE FROM checklist WHERE comprado = 1");
-    } catch (e) {}
+    } catch (e) {
+      console.log("Erro ao limpar comprados", e);
+    }
   };
 
   const listaOrdenada = useMemo(() => {
@@ -207,25 +224,15 @@ export default function ListaScreen() {
           color={item.comprado ? color.tint : color.textSecondary}
         />
         <View style={{ flex: 1 }}>
-          <Text
-            style={[styles.itemNome, item.comprado && styles.itemNomeComprado]}
-          >
+          <Text style={[styles.itemNome, item.comprado && styles.itemNomeComprado]}>
             {item.nome}
           </Text>
-          <Text
-            style={[
-              styles.itemCategoria,
-              item.comprado && styles.itemCategoriaComprado,
-            ]}
-          >
+          <Text style={[styles.itemCategoria, item.comprado && styles.itemCategoriaComprado]}>
             {item.categoria}
           </Text>
         </View>
       </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => removerItem(item.id)}
-        style={styles.btnRemover}
-      >
+      <TouchableOpacity onPress={() => removerItem(item.id)} style={styles.btnRemover}>
         <Ionicons name="trash-outline" size={20} color={color.danger} />
       </TouchableOpacity>
     </View>
@@ -233,102 +240,88 @@ export default function ListaScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.tituloTela}>Planejamento</Text>
-          <Text style={styles.subtituloTela}>
-            {lista.filter((i) => i.comprado).length} de {lista.length} itens
-            pegos
-          </Text>
-        </View>
-        {lista.filter((i) => i.comprado).length > 0 && (
-          <TouchableOpacity onPress={limparComprados} style={styles.btnLimpar}>
-            <Ionicons name="broom-outline" size={16} color={color.warning} />
-            <Text style={styles.textoLimpar}>Limpar pegos</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.formContainer}>
-        <View style={styles.inputRow}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder="Ex: Leite, Sabão (Puxe para atualizar!)"
-            placeholderTextColor={color.textSecondary}
-            value={novoItem}
-            onChangeText={handleMudancaTexto}
-            onSubmitEditing={adicionarItem}
-          />
-          <TouchableOpacity
-            style={[
-              styles.btnAdicionar,
-              { opacity: novoItem.trim() ? 1 : 0.5 },
-            ]}
-            onPress={adicionarItem}
-            disabled={!novoItem.trim()}
-          >
-            <Ionicons name="add" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriasScroll}
-        >
-          {CATEGORIAS.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.catPill,
-                categoriaAtual === cat && styles.catPillActive,
-              ]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setCategoriaAtual(cat);
-              }}
-            >
-              <Text
-                style={[
-                  styles.catText,
-                  categoriaAtual === cat && styles.catTextActive,
-                ]}
-              >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <FlatList
-        data={listaOrdenada}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listaScroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={color.tint}
-          />
-        }
-        ListEmptyComponent={() => (
-          <View style={styles.emptyState}>
-            <Ionicons
-              name="cloud-done-outline"
-              size={70}
-              color={color.borderDark}
-            />
-            <Text style={styles.textoVazio}>Sua lista está vazia!</Text>
-            <Text style={styles.subtextoVazio}>
-              Puxe para baixo para sincronizar com sua parceira.
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.tituloTela}>Planejamento</Text>
+            <Text style={styles.subtituloTela}>
+              {lista.filter((i) => i.comprado).length} de {lista.length} itens pegos
             </Text>
           </View>
-        )}
-      />
+          {lista.filter((i) => i.comprado).length > 0 && (
+            <TouchableOpacity onPress={limparComprados} style={styles.btnLimpar}>
+              <Ionicons name="broom-outline" size={16} color={color.warning} />
+              <Text style={styles.textoLimpar}>Limpar pegos</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.formContainer}>
+          <View style={styles.inputRow}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder="Ex: Leite, Sabão (Puxe para atualizar)"
+              placeholderTextColor={color.textSecondary}
+              value={novoItem}
+              onChangeText={handleMudancaTexto}
+              onSubmitEditing={adicionarItem}
+              editable={!isPensando}
+            />
+            <TouchableOpacity
+              style={[
+                styles.btnAdicionar,
+                { opacity: novoItem.trim() || isPensando ? 1 : 0.5 },
+              ]}
+              onPress={adicionarItem}
+              disabled={!novoItem.trim() || isPensando}
+            >
+              {isPensando ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Ionicons name="add" size={24} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriasScroll}>
+            {CATEGORIAS.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.catPill, categoriaAtual === cat && styles.catPillActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setCategoriaAtual(cat);
+                }}
+              >
+                <Text style={[styles.catText, categoriaAtual === cat && styles.catTextActive]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <FlatList
+          data={listaOrdenada}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listaScroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.tint} />
+          }
+          ListEmptyComponent={() => (
+            <View style={styles.emptyState}>
+              <Ionicons name="cloud-done-outline" size={70} color={color.borderDark} />
+              <Text style={styles.textoVazio}>Sua lista está vazia!</Text>
+              <Text style={styles.subtextoVazio}>
+                Digite um produto acima. Se não soubermos a categoria, a Inteligência Artificial ajudará!
+              </Text>
+            </View>
+          )}
+        />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

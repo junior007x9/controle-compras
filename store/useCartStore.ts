@@ -11,6 +11,7 @@ interface CartState {
   setSaldo: (valor: number) => void;
   setCarrinho: (itens: any[]) => void;
   adicionarItem: (item: any, editando: boolean) => Promise<void>;
+  adicionarVariosItens: (itensProcessados: any[]) => Promise<void>; // Nova função para a IA
   removerItem: (id: string) => Promise<void>;
   limparCarrinho: () => Promise<void>;
   getTotal: () => number;
@@ -158,6 +159,49 @@ export const useCartStore = create<CartState>()(
               ],
             });
           } catch (e) {}
+        }
+      },
+
+      // 🔥 Nova função para receber o array processado pela IA e salvar tudo
+      adicionarVariosItens: async (itensProcessados) => {
+        const state = get();
+        const familiaId = useAuthStore.getState().familiaId;
+
+        // Formata os itens vindos da IA para o padrão do app
+        const novosItens = itensProcessados.map((item) => ({
+          id: Math.random().toString(36).substring(2, 15) + Date.now().toString(36),
+          barras: "",
+          nome: item.nome,
+          preco: String(item.valor || item.preco || "0"),
+          qtd: String(item.quantidade || item.qtd || "1"),
+          categoria: item.categoria || "Outros",
+          fotoProdutoUri: null,
+          fotoEtiquetaUri: null
+        }));
+
+        // Atualiza a UI imediatamente (estado local)
+        set({ carrinho: [...novosItens, ...state.carrinho] });
+
+        // Salva os itens em lote na nuvem (Turso) em background
+        for (const item of novosItens) {
+          try {
+            await turso.execute({
+              sql: "INSERT INTO carrinho_familias (id, barras, nome, preco, qtd, categoria, fotoProdutoUri, fotoEtiquetaUri, familia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              args: [
+                item.id,
+                item.barras,
+                item.nome,
+                item.preco,
+                item.qtd,
+                item.categoria,
+                item.fotoProdutoUri,
+                item.fotoEtiquetaUri,
+                familiaId,
+              ],
+            });
+          } catch (e) {
+            console.error("Erro ao salvar item em lote na nuvem:", e);
+          }
         }
       },
 

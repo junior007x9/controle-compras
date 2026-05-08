@@ -30,9 +30,7 @@ import { Colors } from "../../constants/Colors";
 import { turso } from "../../database";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useCartStore } from "../../store/useCartStore";
-import { useThemeStore } from "../../store/useThemeStore"; // 🔥 TEMA ADICIONADO AQUI
-
-// ANÚNCIOS ATIVADOS AQUI!
+import { useThemeStore } from "../../store/useThemeStore";
 import {
   BannerAd,
   BannerAdSize,
@@ -40,43 +38,38 @@ import {
 } from "react-native-google-mobile-ads";
 
 const IMGBB_API_KEY = process.env.EXPO_PUBLIC_IMGBB_API_KEY;
+
 const CATEGORIAS = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 
-// 🔥 NOVA FUNÇÃO MÁGICA DE COMPRESSÃO (FORA DO COMPONENTE)
 const comprimirImagem = async (uriOriginal: string) => {
   try {
     const imagemComprimida = await ImageManipulator.manipulateAsync(
       uriOriginal,
-      [{ resize: { width: 800 } }], // Reduz a largura para 800px (tamanho ideal)
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }, // Reduz qualidade em 30%
+      [{ resize: { width: 800 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
     );
-
-    // Esta é a URI que fica super leve!
     return imagemComprimida.uri;
   } catch (error) {
     console.error("Erro ao comprimir:", error);
-    return uriOriginal; // Se falhar, devolve a original por segurança
+    return uriOriginal;
   }
 };
 
 export default function HomeScreen() {
-  // 🔥 GESTÃO DE TEMA ATUALIZADA
   const systemTheme = useColorScheme() ?? "light";
   const { temaAtivo } = useThemeStore();
   const theme = temaAtivo === "system" ? systemTheme : temaAtivo;
   const color = Colors[theme];
   const styles = useMemo(() => getStyles(color), [color]);
 
-  // GESTÃO DE CONTA, PERFIL E FAMÍLIA
   const {
     usuario,
-    setUsuario,
     familiaId,
     gerarNovaFamilia,
     setFamiliaId,
-    sairDaFamilia,
     fazerLogout,
   } = useAuthStore();
+  
   const [codigoInput, setCodigoInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [senhaInput, setSenhaInput] = useState("");
@@ -87,7 +80,6 @@ export default function HomeScreen() {
 
   const {
     saldo,
-    setSaldo,
     carrinho,
     adicionarItem,
     removerItem,
@@ -96,6 +88,7 @@ export default function HomeScreen() {
     sincronizarComNuvem,
     atualizarSaldoBanco,
   } = useCartStore();
+  
   const total = getTotal();
 
   const [scannerAtivo, setScannerAtivo] = useState(false);
@@ -106,9 +99,7 @@ export default function HomeScreen() {
 
   const [modalRecargaVisivel, setModalRecargaVisivel] = useState(false);
   const [valorRecarga, setValorRecarga] = useState("");
-  const [tipoOperacaoCarteira, setTipoOperacaoCarteira] = useState<
-    "adicionar" | "remover"
-  >("adicionar");
+  const [tipoOperacaoCarteira, setTipoOperacaoCarteira] = useState<"adicionar" | "remover">("adicionar");
 
   const [modalMercadoVisivel, setModalMercadoVisivel] = useState(false);
   const [nomeMercado, setNomeMercado] = useState("");
@@ -131,12 +122,8 @@ export default function HomeScreen() {
   const [precoAnterior, setPrecoAnterior] = useState<any>(null);
 
   const [fotoProduto, setFotoProduto] = useState<{ uri: string } | null>(null);
-  const [fotoEtiqueta, setFotoEtiqueta] = useState<{ uri: string } | null>(
-    null,
-  );
-  const [modoTirarFoto, setModoTirarFoto] = useState<
-    "produto" | "etiqueta" | null
-  >(null);
+  const [fotoEtiqueta, setFotoEtiqueta] = useState<{ uri: string } | null>(null);
+  const [modoTirarFoto, setModoTirarFoto] = useState<"produto" | "etiqueta" | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   const [modalCalcVisivel, setModalCalcVisivel] = useState(false);
@@ -396,6 +383,20 @@ export default function HomeScreen() {
     setTravaScanner(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    // SE LER UM LINK (EX: QR CODE DA SEFAZ) REDIRECIONA PARA A ABA AJUSTES
+    if (data.startsWith("http") || data.startsWith("https")) {
+      setScannerAtivo(false);
+      setFlashLigado(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        "Nota Fiscal Detectada", 
+        "Para importar Notas Fiscais (SEFAZ), vá até a aba 'Ajustes' e use a Importação Oficial."
+      );
+      setTimeout(() => setTravaScanner(false), 2000);
+      return;
+    }
+
+    // SE FOR UM CÓDIGO DE BARRAS DE PRODUTO
     let nomePreenchido = "";
     let categoriaPreenchida = "Alimentação";
     const itemAntigo = await checarPrecoAnterior(data);
@@ -457,7 +458,6 @@ export default function HomeScreen() {
           quality: 1,
         });
 
-        // Passamos a foto pelo espremedor de imediato!
         const uriLeve = await comprimirImagem(photo.uri);
         const fotoDados = { uri: uriLeve };
 
@@ -526,7 +526,6 @@ export default function HomeScreen() {
       const novoSaldo = saldo - total;
       await atualizarSaldoBanco(novoSaldo);
 
-      // Sincroniza logo a seguir para atualizar o Histórico!
       await sincronizarComNuvem();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -955,7 +954,6 @@ export default function HomeScreen() {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Ionicons name="card" size={24} color="#FFC857" />
             <Text style={styles.walletTitle}>Cartão Dehouse</Text>
-            {/* 🔥 ÍCONE CORRIGIDO: Nuvem de Upload sem cortes e com cor de destaque! */}
             <TouchableOpacity
               onPress={checarComprasPendentes}
               style={{
@@ -1031,24 +1029,26 @@ export default function HomeScreen() {
       </View>
 
       {!scannerAtivo ? (
-        <View style={styles.botoesAcaoContainer}>
-          <TouchableOpacity
-            style={styles.btnAcaoScan}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setScannerAtivo(true);
-            }}
-          >
-            <Ionicons name="barcode-outline" size={24} color="white" />
-            <Text style={styles.textoBotaoAcaoBranco}>Escanear Código</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.btnAcaoManual}
-            onPress={adicionarManualmente}
-          >
-            <Ionicons name="create-outline" size={24} color={color.info} />
-            <Text style={styles.textoBotaoAcaoAzul}>Digitar Manual</Text>
-          </TouchableOpacity>
+        <View>
+          <View style={styles.botoesAcaoContainer}>
+            <TouchableOpacity
+              style={styles.btnAcaoScan}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setScannerAtivo(true);
+              }}
+            >
+              <Ionicons name="barcode-outline" size={24} color="white" />
+              <Text style={styles.textoBotaoAcaoBranco}>Escanear Código</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.btnAcaoManual}
+              onPress={adicionarManualmente}
+            >
+              <Ionicons name="create-outline" size={24} color={color.info} />
+              <Text style={styles.textoBotaoAcaoAzul}>Digitar Manual</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <View style={styles.scannerContainer}>

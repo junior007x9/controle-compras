@@ -1,0 +1,7 @@
+# Ignorar pastas de agentes de IA e symlinks
+.agents/
+.claude/
+.cline/
+
+# Caso tenha outras pastas pesadas que o EAS não precisa:
+node_modules/
