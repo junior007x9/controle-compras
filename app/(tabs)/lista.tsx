@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -23,10 +24,10 @@ import { Colors } from "../../constants/Colors";
 import { turso } from "../../database";
 import { categorizarCompraComIA } from "../../services/iaService";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useAuthStore } from "../../store/useAuthStore"; // 🔥 Importado para pegar a família
 
 const CATEGORIAS = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 
-// 🔥 DICIONÁRIO INTELIGENTE: Rápido, local e sem custo.
 const DICIONARIO_INTELIGENTE: Record<string, string[]> = {
   Limpeza: [
     "sabão", "detergente", "amaciante", "desinfetante", "esponja",
@@ -55,6 +56,9 @@ export default function ListaScreen() {
   const color = Colors[theme];
   const styles = useMemo(() => getStyles(color), [color]);
 
+  // 🔥 PEGA A FAMÍLIA ATUAL
+  const { familiaId } = useAuthStore();
+
   const [novoItem, setNovoItem] = useState("");
   const [categoriaAtual, setCategoriaAtual] = useState("Alimentação");
   const [lista, setLista] = useState<ChecklistItem[]>([]);
@@ -64,11 +68,23 @@ export default function ListaScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const sincronizarListaDaNuvem = async () => {
+    if (!familiaId) return; // Segurança
     try {
+      // Cria a tabela com a coluna familia_id se ainda não existir
       await turso.execute(
-        "CREATE TABLE IF NOT EXISTS checklist (id TEXT PRIMARY KEY, nome TEXT, categoria TEXT, comprado INTEGER)",
+        "CREATE TABLE IF NOT EXISTS checklist (id TEXT PRIMARY KEY, nome TEXT, categoria TEXT, comprado INTEGER, familia_id TEXT)",
       );
-      const result = await turso.execute("SELECT * FROM checklist");
+
+      // Tenta adicionar a coluna caso a tabela seja velha (ignora se der erro)
+      try {
+        await turso.execute("ALTER TABLE checklist ADD COLUMN familia_id TEXT");
+      } catch (e) {}
+
+      // 🔥 FILTRA APENAS PELA FAMÍLIA
+      const result = await turso.execute({
+        sql: "SELECT * FROM checklist WHERE familia_id = ?",
+        args: [familiaId]
+      });
 
       const listaFormatada = result.rows.map((row) => ({
         id: String(row.id),
@@ -76,16 +92,21 @@ export default function ListaScreen() {
         categoria: String(row.categoria),
         comprado: Boolean(row.comprado),
       }));
+
+      // Sincroniza com a memória local (cache isolado)
+      await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(listaFormatada));
       setLista(listaFormatada);
     } catch (e) {
-      console.log("Erro ao sincronizar checklist", e);
+      // Se a base de dados falhar (offline), tenta puxar do cache da família
+      const cacheLocal = await AsyncStorage.getItem(`dehouse_checklist_${familiaId}`);
+      if (cacheLocal) setLista(JSON.parse(cacheLocal));
     }
   };
 
   useFocusEffect(
     useCallback(() => {
       sincronizarListaDaNuvem();
-    }, []),
+    }, [familiaId]),
   );
 
   const onRefresh = async () => {
@@ -95,7 +116,6 @@ export default function ListaScreen() {
     setRefreshing(false);
   };
 
-  // 🔥 LÓGICA DO DICIONÁRIO EM TEMPO REAL
   const handleMudancaTexto = (texto: string) => {
     setNovoItem(texto);
     const textoMinusculo = texto.toLowerCase();
@@ -116,19 +136,17 @@ export default function ListaScreen() {
   };
 
   const adicionarItem = async () => {
-    if (novoItem.trim() === "") return;
+    if (novoItem.trim() === "" || !familiaId) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Keyboard.dismiss();
 
     let categoriaDefinida = categoriaAtual;
     const nomeLimpo = novoItem.trim();
 
-    // Verifica se a palavra está no dicionário local
     const dicionarioAchou = Object.values(DICIONARIO_INTELIGENTE).some(palavras =>
       palavras.some(p => nomeLimpo.toLowerCase().includes(p))
     );
 
-    // Se não achou localmente, chama a IA
     if (!dicionarioAchou) {
       setIsPensando(true);
       const resultadoIA = await categorizarCompraComIA(`Vou colocar na minha lista de compras: ${nomeLimpo}`);
@@ -146,59 +164,79 @@ export default function ListaScreen() {
       comprado: false,
     };
 
-    // Atualização otimista na UI
-    setLista((prev) => [item, ...prev]); 
+    const novaLista = [item, ...lista];
+    setLista(novaLista); 
     setNovoItem("");
     setCategoriaAtual(categoriaDefinida); 
 
     try {
+      // 🔥 SALVA NA BASE DE DADOS COM O ID DA FAMÍLIA
       await turso.execute({
-        sql: "INSERT INTO checklist (id, nome, categoria, comprado) VALUES (?, ?, ?, ?)",
-        args: [item.id, item.nome, item.categoria, 0],
+        sql: "INSERT INTO checklist (id, nome, categoria, comprado, familia_id) VALUES (?, ?, ?, ?, ?)",
+        args: [item.id, item.nome, item.categoria, 0, familiaId],
       });
+      // Atualiza o cache local privado
+      await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
     } catch (e) {
       console.log("Erro ao salvar item", e);
     }
   };
 
   const alternarComprado = async (id: string) => {
+    if (!familiaId) return;
     Haptics.selectionAsync();
     const item = lista.find((i) => i.id === id);
     if (!item) return;
     const novoEstado = !item.comprado;
 
-    setLista((prev) => 
-      prev.map((i) => (i.id === id ? { ...i, comprado: novoEstado } : i))
-    );
+    const novaLista = lista.map((i) => (i.id === id ? { ...i, comprado: novoEstado } : i));
+    setLista(novaLista);
 
     try {
+      // Atualiza na nuvem (só o item com o ID correto e da mesma família para segurança extra)
       await turso.execute({
-        sql: "UPDATE checklist SET comprado = ? WHERE id = ?",
-        args: [novoEstado ? 1 : 0, id],
+        sql: "UPDATE checklist SET comprado = ? WHERE id = ? AND familia_id = ?",
+        args: [novoEstado ? 1 : 0, id, familiaId],
       });
+      await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
     } catch (e) {
       console.log("Erro ao atualizar item", e);
     }
   };
 
   const removerItem = async (id: string) => {
+    if (!familiaId) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    setLista((prev) => prev.filter((item) => item.id !== id));
+    
+    const novaLista = lista.filter((item) => item.id !== id);
+    setLista(novaLista);
+
     try {
+      // Apaga o item da base de dados, garantindo que pertence à família
       await turso.execute({
-        sql: "DELETE FROM checklist WHERE id = ?",
-        args: [id],
+        sql: "DELETE FROM checklist WHERE id = ? AND familia_id = ?",
+        args: [id, familiaId],
       });
+      await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
     } catch (e) {
       console.log("Erro ao remover item", e);
     }
   };
 
   const limparComprados = async () => {
+    if (!familiaId) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setLista((prev) => prev.filter((item) => !item.comprado));
+    
+    const novaLista = lista.filter((item) => !item.comprado);
+    setLista(novaLista);
+
     try {
-      await turso.execute("DELETE FROM checklist WHERE comprado = 1");
+      // 🔥 APAGA SÓ OS COMPRADOS DESTA FAMÍLIA ESPECÍFICA
+      await turso.execute({
+        sql: "DELETE FROM checklist WHERE comprado = 1 AND familia_id = ?",
+        args: [familiaId]
+      });
+      await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
     } catch (e) {
       console.log("Erro ao limpar comprados", e);
     }

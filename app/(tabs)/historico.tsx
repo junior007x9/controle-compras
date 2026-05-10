@@ -62,9 +62,12 @@ export default function HistoricoScreen() {
   const mesVisual = `${String(dataCalc.getMonth() + 1).padStart(2, "0")}/${dataCalc.getFullYear()}`;
   const mesQuery = `${String(dataCalc.getMonth() + 1).padStart(2, "0")}-${dataCalc.getFullYear()}`;
 
+  // 🔥 Filtro duplo: Mês correto E Família correta
   const historicoMes = useMemo(() => {
-    return historicoGlobal.filter((item: any) => item.mes_referencia === mesQuery);
-  }, [historicoGlobal, mesQuery]);
+    return historicoGlobal.filter(
+      (item: any) => item.mes_referencia === mesQuery && item.familia_id === familiaId
+    );
+  }, [historicoGlobal, mesQuery, familiaId]);
 
   // 🔥 LISTA FILTRADA PARA A PESQUISA
   const historicoFiltrado = useMemo(() => {
@@ -105,10 +108,11 @@ export default function HistoricoScreen() {
   useFocusEffect(
     useCallback(() => {
       sincronizarComNuvem();
-    }, []),
+    }, [sincronizarComNuvem]),
   );
 
   const pedirConsultoriaIA = async () => {
+    if (historicoMes.length === 0) return;
     Haptics.selectionAsync();
     setLoadingIA(true);
     
@@ -133,7 +137,7 @@ export default function HistoricoScreen() {
           try {
             await turso.execute({
               sql: "DELETE FROM compras_historico WHERE mes_referencia = ? AND familia_id = ?",
-              args: [mesQuery, familiaId],
+              args: [mesQuery, familiaId || ""], // Proteção por família
             });
             await sincronizarComNuvem();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -150,7 +154,8 @@ export default function HistoricoScreen() {
   const refazerCompra = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const listaSalva = await AsyncStorage.getItem("dehouse_checklist");
+      // 🔥 Salva na lista da família específica
+      const listaSalva = await AsyncStorage.getItem(`dehouse_checklist_${familiaId}`);
       let checklistAtual = listaSalva ? JSON.parse(listaSalva) : [];
       const itensUnicos: any[] = [];
       const nomesVistos = new Set();
@@ -168,7 +173,7 @@ export default function HistoricoScreen() {
       });
 
       const novaLista = [...itensUnicos, ...checklistAtual];
-      await AsyncStorage.setItem("dehouse_checklist", JSON.stringify(novaLista));
+      await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Pronto!", `${itensUnicos.length} itens foram enviados para a sua aba de Planejamento (Lista).`);
@@ -277,7 +282,6 @@ export default function HistoricoScreen() {
         </View>
       </View>
 
-      {/* 🔥 BARRA DE PESQUISA ADICIONADA AQUI */}
       <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
         <View style={{
           flexDirection: "row",
@@ -316,13 +320,12 @@ export default function HistoricoScreen() {
         </View>
       ) : (
         <FlatList
-          data={historicoFiltrado} // 🔥 AGORA A LISTA É A FILTRADA
+          data={historicoFiltrado}
           keyExtractor={(item, index) => item.id ? String(item.id) : String(index)}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listaContainer}
           ListHeaderComponent={() => (
             <View>
-              {/* Oculta os totais e gráficos se o utilizador estiver ativamente a pesquisar (opcional, mantive visível) */}
               <View style={styles.cardTotal}>
                 <View style={styles.cardHeaderTotal}>
                   <Ionicons name="wallet-outline" size={20} color={color.textSecondary} />
@@ -361,7 +364,6 @@ export default function HistoricoScreen() {
 
               <View style={styles.headerListaRecibos}>
                 <Text style={styles.tituloSecao}>
-                  {/* 🔥 MOSTRA A CONTAGEM DOS RESULTADOS FILTRADOS */}
                   Recibos ({historicoFiltrado.length})
                 </Text>
 

@@ -39,10 +39,18 @@ export async function categorizarCompraComIA(textoDoUsuario: string) {
   return await chamarGroq(prompt, textoDoUsuario);
 }
 
-// 2. INTELIGÊNCIA DA SEFAZ (QR CODE)
+// 🔥 2. INTELIGÊNCIA DA SEFAZ (AGORA COM FILTRO DE LIXO HTML)
 export async function extrairNotaDaSefaz(htmlSefaz: string) {
-  const prompt = `Você é um extrator de notas fiscais NFC-e. O usuário enviará o código HTML bruto da página da SEFAZ.
-  Encontre os produtos, quantidades e preços totais.
+  // FILTRO TRITURADOR: Remove código inútil para não engasgar a IA
+  let textoLimpo = htmlSefaz
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ') // Remove JavaScript
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ') // Remove CSS
+    .replace(/<[^>]+>/g, ' | ') // Substitui as tags HTML por barras para separar palavras
+    .replace(/\s+/g, ' ') // Limpa espaços e quebras de linha excessivas
+    .trim();
+
+  const prompt = `Você é um extrator de notas fiscais NFC-e. O usuário enviará o texto extraído da página da SEFAZ.
+  Encontre os produtos, quantidades e preços unitários/totais.
   Retorne APENAS um JSON válido neste formato:
   {
     "mercado": "Nome do Supermercado",
@@ -57,8 +65,9 @@ export async function extrairNotaDaSefaz(htmlSefaz: string) {
       }
     ]
   }`;
-  // Mandamos apenas uma parte do HTML para ser super rápido
-  return await chamarGroq(prompt, htmlSefaz.substring(0, 30000));
+  
+  // Enviamos o texto limpo com uma margem de segurança de 15 mil caracteres
+  return await chamarGroq(prompt, textoLimpo.substring(0, 15000));
 }
 
 // 3. INTELIGÊNCIA DE FOTO (OCR + GROQ)

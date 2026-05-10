@@ -10,16 +10,29 @@ GoogleSignin.configure({
   webClientId: '983322953388-1mb5pquf9oimaga5mr85juk4j8sf1an7.apps.googleusercontent.com',
 });
 
-// 🔥 ADAPTADOR DO COFRE PARA O ZUSTAND
+// 🔥 ADAPTADOR DO COFRE PARA O ZUSTAND (BLINDADO COM TRY-CATCH)
 const secureStorage = {
   getItem: async (name: string): Promise<string | null> => {
-    return (await SecureStore.getItemAsync(name)) || null;
+    try {
+      return (await SecureStore.getItemAsync(name)) || null;
+    } catch (error) {
+      console.log('SecureStore getItem error: ', error);
+      return null;
+    }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    await SecureStore.setItemAsync(name, value);
+    try {
+      await SecureStore.setItemAsync(name, value);
+    } catch (error) {
+      console.log('SecureStore setItem error: ', error);
+    }
   },
   removeItem: async (name: string): Promise<void> => {
-    await SecureStore.removeItemAsync(name);
+    try {
+      await SecureStore.removeItemAsync(name);
+    } catch (error) {
+      console.log('SecureStore removeItem error: ', error);
+    }
   },
 };
 
@@ -149,7 +162,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      // 🔥 AQUI DEFINIMOS QUE ELE DEVE USAR O COFRE NOVO
+      // 🔥 AQUI DEFINIMOS QUE ELE DEVE USAR O COFRE NOVO E SEGURO
       storage: createJSONStorage(() => secureStorage), 
     }
   )
