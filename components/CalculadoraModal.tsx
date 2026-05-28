@@ -1,75 +1,144 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Modal, KeyboardAvoidingView, Platform } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import React, { useState } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
+  ScrollView
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-interface CalculadoraModalProps {
-  visivel: boolean;
-  fecharModal: () => void;
-  color: any;
-}
+export function CalculadoraModal({ visivel, fecharModal, color }: any) {
+  const [precoA, setPrecoA] = useState("");
+  const [pesoA, setPesoA] = useState("");
+  const [precoB, setPrecoB] = useState("");
+  const [pesoB, setPesoB] = useState("");
 
-export function CalculadoraModal({ visivel, fecharModal, color }: CalculadoraModalProps) {
-  const [produtoA, setProdutoA] = useState({ preco: '', peso: '' });
-  const [produtoB, setProdutoB] = useState({ preco: '', peso: '' });
-  const [resultadoCalc, setResultadoCalc] = useState('');
+  const calcularVantagem = () => {
+    const pA = parseFloat(precoA.replace(",", "."));
+    const gA = parseFloat(pesoA.replace(",", "."));
+    const pB = parseFloat(precoB.replace(",", "."));
+    const gB = parseFloat(pesoB.replace(",", "."));
 
-  const calcularMaisBarato = () => {
-    Haptics.selectionAsync();
-    const pA = parseFloat(produtoA.preco.replace(',', '.')) / parseFloat(produtoA.peso.replace(',', '.'));
-    const pB = parseFloat(produtoB.preco.replace(',', '.')) / parseFloat(produtoB.peso.replace(',', '.'));
-    
-    if (!pA || !pB) { setResultadoCalc('Preencha todos os campos!'); return; }
-    
-    if (pA < pB) setResultadoCalc(`O Produto A é ${(((pB - pA) / pB) * 100).toFixed(1)}% MAIS BARATO!`);
-    else if (pB < pA) setResultadoCalc(`O Produto B é ${(((pA - pB) / pA) * 100).toFixed(1)}% MAIS BARATO!`);
-    else setResultadoCalc('O preço por unidade é EXATAMENTE O MESMO!');
+    if (isNaN(pA) || isNaN(gA) || isNaN(pB) || isNaN(gB)) return null;
+
+    const custoPorGramaA = pA / gA;
+    const custoPorGramaB = pB / gB;
+
+    if (custoPorGramaA === custoPorGramaB) return { texto: "Ambos têm o mesmo custo-benefício!", cor: color.info };
+
+    const compensaMais = custoPorGramaA < custoPorGramaB ? "Produto A" : "Produto B";
+    const diferenca = Math.abs((custoPorGramaA - custoPorGramaB) / Math.max(custoPorGramaA, custoPorGramaB)) * 100;
+
+    return {
+      texto: `O ${compensaMais} é mais vantajoso! Economizas ${diferenca.toFixed(1)}%.`,
+      cor: "#10B981" // Verde sucesso
+    };
   };
 
-  const limparEFechar = () => {
-    setResultadoCalc('');
-    setProdutoA({ preco: '', peso: '' });
-    setProdutoB({ preco: '', peso: '' });
-    fecharModal();
+  const resultado = calcularVantagem();
+
+  const limparCalculadora = () => {
+    setPrecoA(""); setPesoA(""); setPrecoB(""); setPesoB("");
   };
 
   return (
-    <Modal visible={visivel} animationType="fade" transparent={true} onRequestClose={limparEFechar}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdropCentral}>
-        <View style={[styles.modalContentCentral, { backgroundColor: color.card }]}>
-          <Text style={[styles.modalTituloCentral, { color: color.text }]}>Calculadora de Economia</Text>
-          
-          <View style={{flexDirection: 'row', marginBottom: 16}}>
-            <TextInput style={[styles.inputModal, { backgroundColor: color.border, color: color.text, flex: 1, marginRight: 8 }]} placeholder="Preço A" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={produtoA.preco} onChangeText={(t) => setProdutoA({...produtoA, preco: t})} />
-            <TextInput style={[styles.inputModal, { backgroundColor: color.border, color: color.text, flex: 1 }]} placeholder="Peso A" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={produtoA.peso} onChangeText={(t) => setProdutoA({...produtoA, peso: t})} />
-          </View>
-          
-          <View style={{flexDirection: 'row', marginBottom: 20}}>
-            <TextInput style={[styles.inputModal, { backgroundColor: color.border, color: color.text, flex: 1, marginRight: 8 }]} placeholder="Preço B" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={produtoB.preco} onChangeText={(t) => setProdutoB({...produtoB, preco: t})} />
-            <TextInput style={[styles.inputModal, { backgroundColor: color.border, color: color.text, flex: 1 }]} placeholder="Peso B" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={produtoB.peso} onChangeText={(t) => setProdutoB({...produtoB, peso: t})} />
-          </View>
-          
-          <TouchableOpacity onPress={calcularMaisBarato} style={{backgroundColor: '#1E1E1E', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16, width: '100%'}}>
-            <Text style={{color: 'white', fontWeight: 'bold'}}>Qual compensa mais?</Text>
-          </TouchableOpacity>
-          
-          {resultadoCalc !== '' && (
-            <View style={{backgroundColor: color.border, padding: 16, borderRadius: 12, alignItems: 'center', width: '100%'}}>
-              <Text style={{color: color.warning, fontWeight: 'bold', fontSize: 16, textAlign: 'center'}}>{resultadoCalc}</Text>
+    <Modal visible={visivel} transparent={true} animationType="slide" onRequestClose={fecharModal}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalContent, { backgroundColor: color.card, borderColor: color.border }]}>
+              
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons name="calculator" size={24} color={color.tint} style={{ marginRight: 8 }} />
+                  <Text style={[styles.modalTitle, { color: color.text }]}>Qual compensa mais?</Text>
+                </View>
+                <TouchableOpacity onPress={fecharModal}>
+                  <Ionicons name="close" size={28} color={color.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
+                <Text style={{ color: color.textSecondary, marginBottom: 20, fontSize: 13 }}>
+                  Preenche os dados para saber qual produto sai mais barato por grama/litro.
+                </Text>
+
+                {/* Produto A */}
+                <View style={[styles.produtoBox, { backgroundColor: color.background, borderColor: color.border }]}>
+                  <Text style={[styles.produtoLabel, { color: color.text }]}>Produto A</Text>
+                  <View style={styles.row}>
+                    <View style={styles.inputContainer}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Preço (R$)</Text>
+                      <TextInput style={[styles.input, { color: color.text, borderColor: color.border }]} placeholder="0,00" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={precoA} onChangeText={setPrecoA} />
+                    </View>
+                    <View style={styles.inputContainer}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Peso/Vol (g ou ml)</Text>
+                      <TextInput style={[styles.input, { color: color.text, borderColor: color.border }]} placeholder="Ex: 500" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={pesoA} onChangeText={setPesoA} />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Produto B */}
+                <View style={[styles.produtoBox, { backgroundColor: color.background, borderColor: color.border }]}>
+                  <Text style={[styles.produtoLabel, { color: color.text }]}>Produto B</Text>
+                  <View style={styles.row}>
+                    <View style={styles.inputContainer}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Preço (R$)</Text>
+                      <TextInput style={[styles.input, { color: color.text, borderColor: color.border }]} placeholder="0,00" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={precoB} onChangeText={setPrecoB} />
+                    </View>
+                    <View style={styles.inputContainer}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Peso/Vol (g ou ml)</Text>
+                      <TextInput style={[styles.input, { color: color.text, borderColor: color.border }]} placeholder="Ex: 800" placeholderTextColor={color.textSecondary} keyboardType="numeric" value={pesoB} onChangeText={setPesoB} />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Resultado */}
+                {resultado ? (
+                  <View style={[styles.resultadoBox, { backgroundColor: resultado.cor + "20", borderColor: resultado.cor }]}>
+                    <Ionicons name="bulb-outline" size={24} color={resultado.cor} style={{ marginRight: 10 }} />
+                    <Text style={[styles.resultadoTexto, { color: resultado.cor }]}>{resultado.texto}</Text>
+                  </View>
+                ) : (
+                  <View style={{ height: 60 }} /> /* Espaço vazio para não saltar a tela */
+                )}
+
+                <TouchableOpacity style={[styles.btnSalvar, { backgroundColor: color.background, borderWidth: 1, borderColor: color.border }]} onPress={limparCalculadora}>
+                  <Text style={[styles.btnSalvarTexto, { color: color.text }]}>Limpar Valores</Text>
+                </TouchableOpacity>
+
+              </ScrollView>
             </View>
-          )}
-          
-          <TouchableOpacity onPress={limparEFechar} style={{marginTop: 20, alignItems: 'center', padding: 10}}>
-            <Text style={{color: color.textSecondary, fontWeight: 'bold'}}>Fechar Calculadora</Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBackdropCentral: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
-  modalContentCentral: { borderRadius: 24, padding: 24, alignItems: 'center' },
-  modalTituloCentral: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-  inputModal: { paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, fontSize: 16, fontWeight: '500' },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "90%", borderWidth: 1 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: "bold" },
+  produtoBox: { padding: 16, borderRadius: 16, marginBottom: 16, borderWidth: 1 },
+  produtoLabel: { fontSize: 16, fontWeight: "bold", marginBottom: 12 },
+  row: { flexDirection: "row", gap: 12 },
+  inputContainer: { flex: 1 },
+  label: { fontSize: 12, marginBottom: 4 },
+  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 16 },
+  resultadoBox: { flexDirection: "row", alignItems: "center", padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 16 },
+  resultadoTexto: { flex: 1, fontSize: 14, fontWeight: "bold" },
+  btnSalvar: { padding: 16, borderRadius: 16, alignItems: "center", marginTop: 4 },
+  btnSalvarTexto: { fontWeight: "bold", fontSize: 16 },
 });

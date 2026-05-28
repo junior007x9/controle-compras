@@ -21,8 +21,11 @@ async function chamarGroq(systemPrompt: string, userText: string) {
     });
 
     const data = await response.json();
-    let texto = data.choices[0].message.content;
+    let texto = data.choices?.[0]?.message?.content || "";
     
+    // 🔥 Remove blocos markdown caso a IA tente enfeitar a resposta
+    texto = texto.replace(/```json/gi, '').replace(/```/g, '').trim();
+
     // Garante que a IA não quebre o JSON com textos extras
     const match = texto.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     if (match) return JSON.parse(match[0]);
@@ -39,24 +42,25 @@ export async function categorizarCompraComIA(textoDoUsuario: string) {
   return await chamarGroq(prompt, textoDoUsuario);
 }
 
-// 🔥 2. INTELIGÊNCIA DA SEFAZ (AGORA COM FILTRO DE LIXO HTML)
-export async function extrairNotaDaSefaz(htmlSefaz: string) {
-  // FILTRO TRITURADOR: Remove código inútil para não engasgar a IA
-  let textoLimpo = htmlSefaz
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ') // Remove JavaScript
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ') // Remove CSS
-    .replace(/<[^>]+>/g, ' | ') // Substitui as tags HTML por barras para separar palavras
-    .replace(/\s+/g, ' ') // Limpa espaços e quebras de linha excessivas
+// 🔥 2. INTELIGÊNCIA DA SEFAZ (AGORA LÊ TEXTO PURO)
+export async function extrairNotaDaSefaz(conteudoSefaz: string) {
+  // Limpeza extra de segurança (remove espaços duplicados)
+  let textoLimpo = conteudoSefaz
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
-  const prompt = `Você é um extrator de notas fiscais NFC-e. O usuário enviará o texto extraído da página da SEFAZ.
-  Encontre os produtos, quantidades e preços unitários/totais.
-  Retorne APENAS um JSON válido neste formato:
+  const prompt = `Você é um extrator especialista de notas fiscais NFC-e. O usuário enviará o TEXTO VISÍVEL da página do governo.
+  Encontre o nome do mercado, todos os produtos comprados, suas quantidades e os preços (use o valor total de cada item ou o unitário).
+  IMPORTANTE: Retorne EXATAMENTE um objeto JSON válido, sem NENHUM texto antes ou depois.
+  Formato exigido:
   {
     "mercado": "Nome do Supermercado",
     "itens": [
       {
-        "id": "gere_um_id_aleatorio",
+        "id": "123",
         "barras": "",
         "nome": "NOME DO PRODUTO LIMPO",
         "preco": "0.00",
@@ -66,7 +70,7 @@ export async function extrairNotaDaSefaz(htmlSefaz: string) {
     ]
   }`;
   
-  // Enviamos o texto limpo com uma margem de segurança de 15 mil caracteres
+  // Enviamos o texto puro, limitado para garantir velocidade extrema
   return await chamarGroq(prompt, textoLimpo.substring(0, 15000));
 }
 

@@ -3,7 +3,7 @@
     "name": "Dehouse Market",
     "slug": "controle-compras",
     "scheme": "dehousemarket",
-    "version": "1.0.1",
+    "version": "1.0.30",
     "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,12 +12,28 @@
       "resizeMode": "cover",
       "backgroundColor": "#FFFFFF"
     },
+    "react-native-google-mobile-ads": {
+      "android_app_id": "ca-app-pub-5151678673256465~1476333427",
+      "ios_app_id": "ca-app-pub-5151678673256465~1476333427"
+    },
     "plugins": [
       "expo-router",
       [
         "expo-camera",
         {
           "cameraPermission": "O aplicativo precisa acessar a câmera para escanear códigos de barras e fotografar os preços."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "O aplicativo precisa de acesso ao microfone para permitir a pesquisa e a adição de produtos por comando de voz."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "O aplicativo precisa de acesso ao microfone para adicionar produtos por voz."
         }
       ],
       [
@@ -29,7 +45,16 @@
       ],
       "@react-native-google-signin/google-signin",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "newArchEnabled": true
+          }
+        }
+      ]
     ],
     "android": {
       "adaptiveIcon": {
@@ -37,11 +62,12 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.detech.dehousemarket",
-      "versionCode": 2,
+      "versionCode": 43,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "extra": {
@@ -49,6 +75,7 @@
       "eas": {
         "projectId": "03239695-f821-4eca-bf59-27a0dd0e6ac0"
       }
-    }
+    },
+    "owner": "junins_21"
   }
 }

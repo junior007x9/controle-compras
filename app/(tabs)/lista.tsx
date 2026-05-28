@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -19,26 +19,33 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Audio } from "expo-av";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 import { Colors } from "../../constants/Colors";
 import { turso } from "../../database";
-import { categorizarCompraComIA } from "../../services/iaService";
 import { useThemeStore } from "../../store/useThemeStore";
-import { useAuthStore } from "../../store/useAuthStore"; // 🔥 Importado para pegar a família
+import { useAuthStore } from "../../store/useAuthStore";
 
 const CATEGORIAS = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 
 const DICIONARIO_INTELIGENTE: Record<string, string[]> = {
+  Alimentação: [
+    "arroz", "feijão", "macarrão", "carne", "frango", "peixe", "ovo", "óleo", "azeite",
+    "sal", "açúcar", "café", "pão", "bolo", "bolacha", "biscoito", "queijo", "presunto",
+    "manteiga", "margarina", "iogurte", "fruta", "legume", "verdura", "batata", "cebola",
+    "alho", "tomate", "farinha", "leite em pó", "molho"
+  ],
   Limpeza: [
-    "sabão", "detergente", "amaciante", "desinfetante", "esponja",
-    "vassoura", "rodo", "saco", "lixo", "cloro", "água sanitária", "desengordurante"
+    "sabão", "detergente", "amaciante", "desinfetante", "esponja", "vassoura", "rodo", 
+    "saco", "lixo", "cloro", "água sanitária", "desengordurante", "pano", "multiuso", "álcool"
   ],
   Higiene: [
-    "shampoo", "condicionador", "sabonete", "pasta", "escova",
-    "desodorante", "papel higiênico", "absorvente", "barbeador", "fio dental"
+    "shampoo", "condicionador", "sabonete", "pasta", "escova", "desodorante", "papel higiênico", 
+    "absorvente", "barbeador", "fio dental", "cotonete", "creme", "fralda", "lenço"
   ],
   Bebidas: [
-    "leite", "café", "refrigerante", "suco", "água", "cerveja", "vinho", "chá", "energético"
+    "leite", "refrigerante", "suco", "água", "cerveja", "vinho", "chá", "energético", "vodka", "licor"
   ],
 };
 
@@ -56,7 +63,6 @@ export default function ListaScreen() {
   const color = Colors[theme];
   const styles = useMemo(() => getStyles(color), [color]);
 
-  // 🔥 PEGA A FAMÍLIA ATUAL
   const { familiaId } = useAuthStore();
 
   const [novoItem, setNovoItem] = useState("");
@@ -64,23 +70,69 @@ export default function ListaScreen() {
   const [lista, setLista] = useState<ChecklistItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   
-  const [isPensando, setIsPensando] = useState(false);
+  const [estaGravando, setEstaGravando] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
+  // 🔥 NOVOS EVENTOS DO MICROFONE (MODERNO)
+  useSpeechRecognitionEvent("start", () => setEstaGravando(true));
+  useSpeechRecognitionEvent("end", () => setEstaGravando(false));
+
+  useSpeechRecognitionEvent("result", (event) => {
+    const textoFalado = event.results[0]?.transcript;
+    if (textoFalado) {
+      setNovoItem(textoFalado);
+      executarDicionarioLocal(textoFalado);
+      adicionarItem(textoFalado); // Adiciona sozinho sem botão
+      setEstaGravando(false);
+      ExpoSpeechRecognitionModule.stop();
+    }
+  });
+
+  useSpeechRecognitionEvent("error", (event) => {
+    setEstaGravando(false);
+    // Ignora erros comuns de silêncio para não incomodar o usuário
+    if (event.error !== "no-speech" && event.error !== "audio-capture") {
+      Alert.alert("Aviso de Sistema", `Detalhe técnico: ${event.error}`);
+    }
+  });
+
+  const alternarGravacaoVoz = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (estaGravando) {
+      try {
+        ExpoSpeechRecognitionModule.stop();
+        setEstaGravando(false);
+      } catch (e) {}
+    } else {
+      try {
+        const { granted } = await Audio.requestPermissionsAsync();
+        
+        if (!granted) {
+          Alert.alert("Permissão Negada", "Precisas permitir o microfone nas definições do teu celular.");
+          return;
+        }
+
+        setNovoItem("");
+        setEstaGravando(true);
+        ExpoSpeechRecognitionModule.start({ lang: "pt-BR" });
+      } catch (e: any) {
+        setEstaGravando(false);
+        Alert.alert("Erro", `Não consegui iniciar: ${e.message}`);
+      }
+    }
+  };
+
   const sincronizarListaDaNuvem = async () => {
-    if (!familiaId) return; // Segurança
+    if (!familiaId) return; 
     try {
-      // Cria a tabela com a coluna familia_id se ainda não existir
       await turso.execute(
         "CREATE TABLE IF NOT EXISTS checklist (id TEXT PRIMARY KEY, nome TEXT, categoria TEXT, comprado INTEGER, familia_id TEXT)",
       );
 
-      // Tenta adicionar a coluna caso a tabela seja velha (ignora se der erro)
       try {
         await turso.execute("ALTER TABLE checklist ADD COLUMN familia_id TEXT");
       } catch (e) {}
 
-      // 🔥 FILTRA APENAS PELA FAMÍLIA
       const result = await turso.execute({
         sql: "SELECT * FROM checklist WHERE familia_id = ?",
         args: [familiaId]
@@ -93,11 +145,9 @@ export default function ListaScreen() {
         comprado: Boolean(row.comprado),
       }));
 
-      // Sincroniza com a memória local (cache isolado)
       await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(listaFormatada));
       setLista(listaFormatada);
     } catch (e) {
-      // Se a base de dados falhar (offline), tenta puxar do cache da família
       const cacheLocal = await AsyncStorage.getItem(`dehouse_checklist_${familiaId}`);
       if (cacheLocal) setLista(JSON.parse(cacheLocal));
     }
@@ -116,10 +166,8 @@ export default function ListaScreen() {
     setRefreshing(false);
   };
 
-  const handleMudancaTexto = (texto: string) => {
-    setNovoItem(texto);
+  const executarDicionarioLocal = (texto: string) => {
     const textoMinusculo = texto.toLowerCase();
-
     let categoriaEncontrada = "";
     for (const [categoria, palavras] of Object.entries(DICIONARIO_INTELIGENTE)) {
       if (palavras.some((palavra) => textoMinusculo.includes(palavra))) {
@@ -127,34 +175,32 @@ export default function ListaScreen() {
         break;
       }
     }
-
     if (categoriaEncontrada) {
       setCategoriaAtual(categoriaEncontrada);
-    } else if (texto === "") {
-      setCategoriaAtual("Alimentação");
     }
   };
 
-  const adicionarItem = async () => {
-    if (novoItem.trim() === "" || !familiaId) return;
+  const handleMudancaTexto = (texto: string) => {
+    setNovoItem(texto);
+    executarDicionarioLocal(texto);
+  };
+
+  const adicionarItem = async (textoVoz?: string | any) => {
+    const textoFinal = typeof textoVoz === 'string' ? textoVoz : novoItem;
+    
+    if (textoFinal.trim() === "" || !familiaId) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Keyboard.dismiss();
 
+    const nomeLimpo = textoFinal.trim();
     let categoriaDefinida = categoriaAtual;
-    const nomeLimpo = novoItem.trim();
 
-    const dicionarioAchou = Object.values(DICIONARIO_INTELIGENTE).some(palavras =>
+    const dicionarioAchou = Object.entries(DICIONARIO_INTELIGENTE).find(([_, palavras]) =>
       palavras.some(p => nomeLimpo.toLowerCase().includes(p))
     );
 
-    if (!dicionarioAchou) {
-      setIsPensando(true);
-      const resultadoIA = await categorizarCompraComIA(`Vou colocar na minha lista de compras: ${nomeLimpo}`);
-      
-      if (resultadoIA?.categoria && CATEGORIAS.includes(resultadoIA.categoria)) {
-        categoriaDefinida = resultadoIA.categoria;
-      }
-      setIsPensando(false);
+    if (dicionarioAchou) {
+      categoriaDefinida = dicionarioAchou[0];
     }
 
     const item: ChecklistItem = {
@@ -170,12 +216,10 @@ export default function ListaScreen() {
     setCategoriaAtual(categoriaDefinida); 
 
     try {
-      // 🔥 SALVA NA BASE DE DADOS COM O ID DA FAMÍLIA
       await turso.execute({
         sql: "INSERT INTO checklist (id, nome, categoria, comprado, familia_id) VALUES (?, ?, ?, ?, ?)",
         args: [item.id, item.nome, item.categoria, 0, familiaId],
       });
-      // Atualiza o cache local privado
       await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
     } catch (e) {
       console.log("Erro ao salvar item", e);
@@ -193,15 +237,12 @@ export default function ListaScreen() {
     setLista(novaLista);
 
     try {
-      // Atualiza na nuvem (só o item com o ID correto e da mesma família para segurança extra)
       await turso.execute({
         sql: "UPDATE checklist SET comprado = ? WHERE id = ? AND familia_id = ?",
         args: [novoEstado ? 1 : 0, id, familiaId],
       });
       await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
-    } catch (e) {
-      console.log("Erro ao atualizar item", e);
-    }
+    } catch (e) {}
   };
 
   const removerItem = async (id: string) => {
@@ -212,15 +253,12 @@ export default function ListaScreen() {
     setLista(novaLista);
 
     try {
-      // Apaga o item da base de dados, garantindo que pertence à família
       await turso.execute({
         sql: "DELETE FROM checklist WHERE id = ? AND familia_id = ?",
         args: [id, familiaId],
       });
       await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
-    } catch (e) {
-      console.log("Erro ao remover item", e);
-    }
+    } catch (e) {}
   };
 
   const limparComprados = async () => {
@@ -231,15 +269,12 @@ export default function ListaScreen() {
     setLista(novaLista);
 
     try {
-      // 🔥 APAGA SÓ OS COMPRADOS DESTA FAMÍLIA ESPECÍFICA
       await turso.execute({
         sql: "DELETE FROM checklist WHERE comprado = 1 AND familia_id = ?",
         args: [familiaId]
       });
       await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
-    } catch (e) {
-      console.log("Erro ao limpar comprados", e);
-    }
+    } catch (e) {}
   };
 
   const listaOrdenada = useMemo(() => {
@@ -251,23 +286,11 @@ export default function ListaScreen() {
 
   const renderItem = ({ item }: { item: ChecklistItem }) => (
     <View style={[styles.itemCard, item.comprado && styles.itemCardComprado]}>
-      <TouchableOpacity
-        style={styles.checkArea}
-        onPress={() => alternarComprado(item.id)}
-        activeOpacity={0.7}
-      >
-        <Ionicons
-          name={item.comprado ? "checkbox" : "square-outline"}
-          size={26}
-          color={item.comprado ? color.tint : color.textSecondary}
-        />
+      <TouchableOpacity style={styles.checkArea} onPress={() => alternarComprado(item.id)} activeOpacity={0.7}>
+        <Ionicons name={item.comprado ? "checkbox" : "square-outline"} size={26} color={item.comprado ? color.tint : color.textSecondary} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.itemNome, item.comprado && styles.itemNomeComprado]}>
-            {item.nome}
-          </Text>
-          <Text style={[styles.itemCategoria, item.comprado && styles.itemCategoriaComprado]}>
-            {item.categoria}
-          </Text>
+          <Text style={[styles.itemNome, item.comprado && styles.itemNomeComprado]}>{item.nome}</Text>
+          <Text style={[styles.itemCategoria, item.comprado && styles.itemCategoriaComprado]}>{item.categoria}</Text>
         </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => removerItem(item.id)} style={styles.btnRemover}>
@@ -299,42 +322,33 @@ export default function ListaScreen() {
             <TextInput
               ref={inputRef}
               style={styles.input}
-              placeholder="Ex: Leite, Sabão (Puxe para atualizar)"
-              placeholderTextColor={color.textSecondary}
+              placeholder={estaGravando ? "Ouvindo você..." : "Ex: Arroz, Detergente..."}
+              placeholderTextColor={estaGravando ? color.tint : color.textSecondary}
               value={novoItem}
               onChangeText={handleMudancaTexto}
               onSubmitEditing={adicionarItem}
-              editable={!isPensando}
             />
-            <TouchableOpacity
-              style={[
-                styles.btnAdicionar,
-                { opacity: novoItem.trim() || isPensando ? 1 : 0.5 },
-              ]}
-              onPress={adicionarItem}
-              disabled={!novoItem.trim() || isPensando}
+
+            <TouchableOpacity 
+              style={[styles.btnMicrofone, estaGravando && { backgroundColor: color.danger }]} 
+              onPress={alternarGravacaoVoz}
             >
-              {isPensando ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Ionicons name="add" size={24} color="white" />
-              )}
+              <Ionicons name={estaGravando ? "mic" : "mic-outline"} size={22} color="white" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btnAdicionar, { opacity: novoItem.trim() ? 1 : 0.5 }]}
+              onPress={adicionarItem}
+              disabled={!novoItem.trim()}
+            >
+              <Ionicons name="add" size={24} color="white" />
             </TouchableOpacity>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriasScroll}>
             {CATEGORIAS.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.catPill, categoriaAtual === cat && styles.catPillActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setCategoriaAtual(cat);
-                }}
-              >
-                <Text style={[styles.catText, categoriaAtual === cat && styles.catTextActive]}>
-                  {cat}
-                </Text>
+              <TouchableOpacity key={cat} style={[styles.catPill, categoriaAtual === cat && styles.catPillActive]} onPress={() => { Haptics.selectionAsync(); setCategoriaAtual(cat); }}>
+                <Text style={[styles.catText, categoriaAtual === cat && styles.catTextActive]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -346,15 +360,13 @@ export default function ListaScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listaScroll}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.tint} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.tint} />}
           ListEmptyComponent={() => (
             <View style={styles.emptyState}>
-              <Ionicons name="cloud-done-outline" size={70} color={color.borderDark} />
+              <Ionicons name="mic-outline" size={70} color={color.borderDark} />
               <Text style={styles.textoVazio}>Sua lista está vazia!</Text>
               <Text style={styles.subtextoVazio}>
-                Digite um produto acima. Se não soubermos a categoria, a Inteligência Artificial ajudará!
+                Digite um produto ou clique no microfone para falar o que deseja adicionar ao planejamento!
               </Text>
             </View>
           )}
@@ -367,103 +379,31 @@ export default function ListaScreen() {
 const getStyles = (c: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    header: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: 20,
-      paddingTop: 10,
-    },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 10 },
     tituloTela: { fontSize: 28, fontWeight: "bold", color: c.text },
     subtituloTela: { fontSize: 14, color: c.textSecondary, fontWeight: "600" },
-    btnLimpar: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: c.border,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 12,
-      gap: 4,
-    },
+    btnLimpar: { flexDirection: "row", alignItems: "center", backgroundColor: c.border, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 4 },
     textoLimpar: { color: c.warning, fontSize: 12, fontWeight: "bold" },
     formContainer: { paddingHorizontal: 20, marginBottom: 16 },
-    inputRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-    input: {
-      flex: 1,
-      backgroundColor: c.card,
-      borderWidth: 1,
-      borderColor: c.borderDark,
-      borderRadius: 16,
-      paddingHorizontal: 16,
-      fontSize: 16,
-      color: c.text,
-    },
-    btnAdicionar: {
-      width: 54,
-      height: 54,
-      backgroundColor: c.tint,
-      borderRadius: 16,
-      justifyContent: "center",
-      alignItems: "center",
-      elevation: 2,
-    },
+    inputRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+    input: { flex: 1, backgroundColor: c.card, borderWidth: 1, borderColor: c.borderDark, borderRadius: 16, paddingHorizontal: 16, fontSize: 16, color: c.text },
+    btnMicrofone: { width: 54, height: 54, backgroundColor: '#3B82F6', borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 2 },
+    btnAdicionar: { width: 54, height: 54, backgroundColor: c.tint, borderRadius: 16, justifyContent: "center", alignItems: "center", elevation: 2 },
     categoriasScroll: { marginBottom: 4 },
-    catPill: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: c.border,
-      marginRight: 10,
-      borderWidth: 1,
-      borderColor: "transparent",
-    },
-    catPillActive: {
-      backgroundColor: c.border,
-      borderColor: c.tint,
-      borderWidth: 1,
-    },
+    catPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: c.border, marginRight: 10, borderWidth: 1, borderColor: "transparent" },
+    catPillActive: { backgroundColor: c.border, borderColor: c.tint, borderWidth: 1 },
     catText: { color: c.textSecondary, fontWeight: "600", fontSize: 13 },
     catTextActive: { color: c.tint },
     listaScroll: { paddingHorizontal: 20, paddingBottom: 40 },
-    itemCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: c.card,
-      padding: 16,
-      borderRadius: 16,
-      marginBottom: 10,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
+    itemCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: c.card, padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: c.border },
     itemCardComprado: { backgroundColor: c.background, opacity: 0.6 },
     checkArea: { flexDirection: "row", alignItems: "center", flex: 1, gap: 12 },
     itemNome: { fontSize: 16, color: c.text, fontWeight: "bold", flex: 1 },
-    itemNomeComprado: {
-      textDecorationLine: "line-through",
-      color: c.textSecondary,
-    },
-    itemCategoria: {
-      fontSize: 12,
-      color: c.tint,
-      fontWeight: "600",
-      marginTop: 2,
-    },
+    itemNomeComprado: { textDecorationLine: "line-through", color: c.textSecondary },
+    itemCategoria: { fontSize: 12, color: c.tint, fontWeight: "600", marginTop: 2 },
     itemCategoriaComprado: { color: c.textSecondary },
     btnRemover: { padding: 8 },
     emptyState: { alignItems: "center", marginTop: 40, paddingHorizontal: 20 },
-    textoVazio: {
-      color: c.text,
-      fontSize: 18,
-      fontWeight: "bold",
-      marginTop: 16,
-      textAlign: "center",
-    },
-    subtextoVazio: {
-      color: c.textSecondary,
-      fontSize: 15,
-      marginTop: 8,
-      textAlign: "center",
-      lineHeight: 22,
-    },
+    textoVazio: { color: c.text, fontSize: 18, fontWeight: "bold", marginTop: 16, textAlign: "center" },
+    subtextoVazio: { color: c.textSecondary, fontSize: 15, marginTop: 8, textAlign: "center", lineHeight: 22 },
   });

@@ -3,9 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Keyboard,
   RefreshControl,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -17,10 +17,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { Audio } from "expo-av"; 
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BannerAd, BannerAdSize, TestIds } from "react-native-google-mobile-ads";
+import { Image } from "expo-image";
 
 import { CalculadoraModal } from "../../components/CalculadoraModal";
 import { Colors } from "../../constants/Colors";
@@ -28,19 +30,17 @@ import { useAuthStore } from "../../store/useAuthStore";
 import { useCartStore } from "../../store/useCartStore";
 import { useThemeStore } from "../../store/useThemeStore";
 
-// Importações dos Serviços e Tipos
 import { Produto, PrecoAnterior } from "../../types";
-import { comprimirImagem, buscarNaInternet } from "../../services/apiService";
+import { buscarNaInternet, comprimirImagem } from "../../services/apiService"; 
 import { checarPrecoAnterior, processarCompra } from "../../services/dbService";
 import { CarrinhoItem } from "../../components/CarrinhoItem";
 import { getStyles } from "../../styles/homeStyles";
 
-// Importações dos Modais Refatorados
 import { MercadoModal } from "../../components/modals/MercadoModal";
 import { RecargaModal } from "../../components/modals/RecargaModal";
 import { ProdutoModal } from "../../components/modals/ProdutoModal";
-import { CameraModal } from "../../components/modals/CameraModal";
-import { FotoAmpliadaModal } from "../../components/modals/FotoAmpliadaModal";
+import { CameraModal } from "../../components/modals/CameraModal"; 
+import { FotoAmpliadaModal } from "../../components/modals/FotoAmpliadaModal"; 
 
 export default function HomeScreen() {
   const systemTheme = useColorScheme() ?? "light";
@@ -49,13 +49,19 @@ export default function HomeScreen() {
   const color = Colors[theme];
   const styles = useMemo(() => getStyles(color), [color]);
 
-  const { usuario, familiaId, gerarNovaFamilia, setFamiliaId, fazerLogout } = useAuthStore();
+  const { usuario, familiaId, gerarNovaFamilia, setFamiliaId, fazerLogout, entrarNaFamiliaComSenha, criarNovaFamiliaComSenha } = useAuthStore();
   
   const [codigoInput, setCodigoInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [senhaInput, setSenhaInput] = useState("");
 
-  const [permission, requestPermission] = useCameraPermissions();
+  const [senhaFamiliaEntrar, setSenhaFamiliaEntrar] = useState("");
+  const [senhaFamiliaCriar, setSenhaFamiliaCriar] = useState("");
+  const [loadingFamilia, setLoadingFamilia] = useState(false);
+
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
+
   const scannerRef = useRef<any>(null);
   const cameraShotRef = useRef<any>(null);
 
@@ -63,7 +69,6 @@ export default function HomeScreen() {
   const total = getTotal();
 
   const [scannerAtivo, setScannerAtivo] = useState(false);
-  // 🔥 NOVO ESTADO: Controla se o scanner já passou do tempo de foco
   const [scannerPronto, setScannerPronto] = useState(false);
   
   const [flashLigado, setFlashLigado] = useState(false);
@@ -88,12 +93,37 @@ export default function HomeScreen() {
   const [editando, setEditando] = useState(false);
   const [precoAnterior, setPrecoAnterior] = useState<PrecoAnterior | null>(null);
 
+  const [modalCalcVisivel, setModalCalcVisivel] = useState(false);
+
   const [fotoProduto, setFotoProduto] = useState<{ uri: string } | null>(null);
   const [fotoEtiqueta, setFotoEtiqueta] = useState<{ uri: string } | null>(null);
   const [modoTirarFoto, setModoTirarFoto] = useState<"produto" | "etiqueta" | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
-  const [modalCalcVisivel, setModalCalcVisivel] = useState(false);
+  // 🔥 CORREÇÃO: O aplicativo verifica sempre as permissões do microfone, destravando o loop infinito de carregamento
+  useEffect(() => {
+    async function checarPermissaoMic() {
+      const { granted } = await Audio.getPermissionsAsync();
+      setMicPermissionGranted(granted);
+    }
+    checarPermissaoMic();
+  }, []);
+
+  const pedirPermissoesDoSistema = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    const cameraRes = await requestCameraPermission();
+    
+    const micRes = await Audio.requestPermissionsAsync();
+    setMicPermissionGranted(micRes.granted);
+
+    if (!cameraRes.granted || !micRes.granted) {
+      Alert.alert(
+        "Aviso Importante", 
+        "Para usares as funções de Voz e Escaneamento de Barras, o aplicativo necessita destas permissões. Se o pop-up não abriu, ativa-as nas configurações do teu telemóvel."
+      );
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -167,7 +197,7 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => { checarComprasPendentes(); }, []);
+  useEffect(() => { ip => checarComprasPendentes(); }, []);
 
   useEffect(() => {
     if (total > saldo && !alertaDisparado && total > 0 && saldo > 0) {
@@ -202,13 +232,12 @@ export default function HomeScreen() {
   const adicionarManualmente = () => {
     Haptics.selectionAsync();
     setScannerAtivo(false); setEditando(false); setPrecoAnterior(null); setFlashLigado(false);
-    setFotoProduto(null); setFotoEtiqueta(null);
+    setFotoProduto(null); setFotoEtiqueta(null); 
     setProdutoAtual({ id: Date.now().toString(), barras: "", nome: "", preco: "", qtd: "1", categoria: "Alimentação" });
     setModalVisivel(true);
   };
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
-    // 🔥 IMPORTANTE: O Scanner ignora os códigos lidos se não estiver 'pronto'
     if (travaScanner || !scannerPronto) return;
     
     setTravaScanner(true);
@@ -217,7 +246,7 @@ export default function HomeScreen() {
     if (data.startsWith("http") || data.startsWith("https")) {
       setScannerAtivo(false); setFlashLigado(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Nota Fiscal Detectada", "Para importar Notas Fiscais, vá até a aba 'Ajustes'.");
+      Alert.alert("Nota Fiscal Detectada", "Para importar Notas Fiscais, vá até a aba 'Ajustes' e abra a sua Gaveta de Notas.");
       setTimeout(() => setTravaScanner(false), 2000);
       return;
     }
@@ -232,7 +261,6 @@ export default function HomeScreen() {
       categoriaPreenchida = String(itemAntigo.categoria);
       setPrecoAnterior(itemAntigo);
     } else {
-      // Agora a nossa busca usa OpenFoodFacts, Cosmos e a Inteligência Artificial
       nomePreenchido = await buscarNaInternet(data);
     }
 
@@ -242,7 +270,8 @@ export default function HomeScreen() {
       return;
     }
 
-    setScannerAtivo(false); setEditando(false); setFotoProduto(null); setFotoEtiqueta(null); setFlashLigado(false);
+    setScannerAtivo(false); setEditando(false); setFlashLigado(false);
+    setFotoProduto(null); setFotoEtiqueta(null); 
     setProdutoAtual({ id: Date.now().toString(), barras: data, nome: nomePreenchido, preco: "", qtd: "1", categoria: categoriaPreenchida });
     setModalVisivel(true);
     setTimeout(() => setTravaScanner(false), 2000);
@@ -260,7 +289,7 @@ export default function HomeScreen() {
     if (cameraShotRef.current && modoTirarFoto) {
       try {
         const photo = await cameraShotRef.current.takePictureAsync({ quality: 1 });
-        const uriLeve = await comprimirImagem(photo.uri);
+        const uriLeve = await comprimirImagem(photo.uri); 
         const fotoDados = { uri: uriLeve };
 
         if (modoTirarFoto === "produto") setFotoProduto(fotoDados);
@@ -279,7 +308,12 @@ export default function HomeScreen() {
       Alert.alert("Faltam Dados", "Preencha o nome e o preço.");
       return;
     }
-    const itemPronto = { ...produtoAtual, fotoProdutoUri: fotoProduto?.uri || null, fotoEtiquetaUri: fotoEtiqueta?.uri || null };
+
+    const itemPronto = { 
+      ...produtoAtual, 
+      fotoProdutoUri: fotoProduto?.uri || null, 
+      fotoEtiquetaUri: fotoEtiqueta?.uri || null 
+    };
 
     adicionarItem(itemPronto, editando);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -290,10 +324,7 @@ export default function HomeScreen() {
   const abrirFinalizacao = () => {
     const itensSemPreco = carrinho.filter((i: any) => parseFloat(i.preco?.replace(",", ".") || "0") === 0);
     if (itensSemPreco.length > 0) {
-      Alert.alert(
-        "Itens sem preço!", 
-        "Você usou o Modo Rápido. Clique nos itens amarelos da lista e coloque o preço antes de finalizar a compra."
-      );
+      Alert.alert("Itens sem preço!", "Você usou o Modo Rápido. Clique nos itens amarelos da lista e coloque o preço antes de finalizar.");
       return;
     }
     if (total > saldo) {
@@ -333,7 +364,9 @@ export default function HomeScreen() {
     }
   };
 
-  if (!permission) return <View style={styles.center}><ActivityIndicator size="large" color={color.tint} /></View>;
+  if (!cameraPermission || micPermissionGranted === null) {
+    return <View style={styles.center}><ActivityIndicator size="large" color={color.tint} /></View>;
+  }
 
   if (!usuario) {
     return (
@@ -364,36 +397,88 @@ export default function HomeScreen() {
     );
   }
 
+  if (!cameraPermission.granted || !micPermissionGranted) {
+    return (
+      <SafeAreaView style={[styles.center, { padding: 32, backgroundColor: color.background }]}>
+        <View style={{ backgroundColor: color.card, padding: 24, borderRadius: 28, width: "100%", alignItems: "center", borderWidth: 1, borderColor: color.border, elevation: 4 }}>
+          <View style={{ flexDirection: "row", gap: 16, marginBottom: 20 }}>
+            <Ionicons name="camera" size={40} color={color.tint} />
+            <Ionicons name="mic" size={40} color={color.info} />
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: "bold", color: color.text, marginBottom: 12, textAlign: "center" }}>Permissões Necessárias</Text>
+          <Text style={{ fontSize: 14, color: color.textSecondary, textAlign: "center", lineHeight: 22, marginBottom: 28 }}>
+            Para usares o leitor de código de barras, anexar fotos aos teus recibos e adicionar produtos falando ao microfone, precisamos que atives os acessos nativos do sistema.
+          </Text>
+          
+          <TouchableOpacity 
+            style={[styles.btnAdicionarCarrinho, { backgroundColor: color.tint, width: "100%", marginBottom: 0 }]} 
+            onPress={pedirPermissoesDoSistema}
+          >
+            <Text style={styles.textoBotaoBranco}>Ativar Câmera e Microfone</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!familiaId) {
     return (
-      <SafeAreaView style={[styles.center, { padding: 24, backgroundColor: color.background }]}>
-        <Image source={{ uri: usuario.foto }} style={{ width: 80, height: 80, borderRadius: 40, marginBottom: 16, borderWidth: 3, borderColor: color.tint }} />
+      <ScrollView contentContainerStyle={{ padding: 24, paddingVertical: 40, alignItems: 'center' }} style={{ backgroundColor: color.background, flex: 1 }}>
+        <Image source={{ uri: usuario.foto }} style={{ width: 80, height: 80, borderRadius: 40, marginBottom: 16, borderWidth: 3, borderColor: color.tint }} contentFit="cover" transition={300} />
         <Text style={{ fontSize: 24, fontWeight: "bold", color: color.text, marginBottom: 10, textAlign: "center" }}>Olá, {usuario.nome}!</Text>
-        <Text style={{ fontSize: 15, color: color.textSecondary, textAlign: "center", marginBottom: 40 }}>Para partilhares compras com alguém da tua casa, precisas de criar uma família ou entrar numa já existente.</Text>
-        <View style={{ width: "100%", backgroundColor: color.card, padding: 24, borderRadius: 24, elevation: 2, borderWidth: 1, borderColor: color.border }}>
-          <Text style={{ fontSize: 16, fontWeight: "bold", color: color.text, marginBottom: 12 }}>Recebeste um código?</Text>
-          <TextInput style={[styles.inputAuth, { marginBottom: 16, textAlign: "center", letterSpacing: 4, fontWeight: "bold" }]} placeholder="Ex: A8X9P" placeholderTextColor={color.textSecondary} value={codigoInput} autoCapitalize="characters" onChangeText={setCodigoInput} />
+        <Text style={{ fontSize: 15, color: color.textSecondary, textAlign: "center", marginBottom: 30 }}>Para partilhares compras e o teu histórico em tempo real, precisas de criar uma família ou entrar numa existente.</Text>
+        
+        <View style={{ width: "100%", backgroundColor: color.card, padding: 20, borderRadius: 24, elevation: 2, borderWidth: 1, borderColor: color.border, marginBottom: 20 }}>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: color.text, marginBottom: 12 }}>Juntar-se a uma Família</Text>
+          <TextInput style={[styles.inputAuth, { marginBottom: 10, textAlign: "center", letterSpacing: 4, fontWeight: "bold" }]} placeholder="CÓDIGO (Ex: A8X9P)" placeholderTextColor={color.textSecondary} value={codigoInput} autoCapitalize="characters" onChangeText={setCodigoInput} />
+          <TextInput style={[styles.inputAuth, { marginBottom: 16, textAlign: "center" }]} placeholder="Palavra-passe (se houver)" placeholderTextColor={color.textSecondary} secureTextEntry value={senhaFamiliaEntrar} onChangeText={setSenhaFamiliaEntrar} />
           
           <TouchableOpacity 
             style={[styles.btnAdicionarCarrinho, { backgroundColor: color.info, marginBottom: 0 }]} 
-            onPress={() => { 
+            onPress={async () => { 
               const codigoTratado = codigoInput.trim().toUpperCase();
               if (codigoTratado.length < 4) return Alert.alert("Erro", "Código inválido."); 
-              if (codigoTratado === "A8X9P") return Alert.alert("Aviso!", "Esse é apenas um código de exemplo! Crie a sua própria família abaixo.");
               
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
-              setFamiliaId(codigoTratado); 
+              setLoadingFamilia(true);
+              const sucesso = await entrarNaFamiliaComSenha(codigoTratado, senhaFamiliaEntrar);
+              setLoadingFamilia(false);
+              
+              if (sucesso) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
+                setCodigoInput(""); setSenhaFamiliaEntrar("");
+              }
             }}
           >
-            <Text style={styles.textoBotaoBranco}>Entrar na Família</Text>
+            {loadingFamilia ? <ActivityIndicator color="white" /> : <Text style={styles.textoBotaoBranco}>Entrar na Família</Text>}
           </TouchableOpacity>
         </View>
-        <View style={{ height: 1, width: "100%", backgroundColor: color.border, marginVertical: 30 }} />
-        <TouchableOpacity style={{ width: "100%", backgroundColor: color.tint, padding: 20, borderRadius: 20, alignItems: "center" }} onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); gerarNovaFamilia(); }}>
-          <Ionicons name="home" size={24} color="white" style={{ marginBottom: 8 }} />
-          <Text style={{ color: "white", fontWeight: "bold", fontSize: 16 }}>Criar a Minha Família</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+
+        <View style={{ width: "100%", backgroundColor: color.card, padding: 20, borderRadius: 24, elevation: 2, borderWidth: 1, borderColor: color.border }}>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: color.text, marginBottom: 12 }}>Criar a Minha Família</Text>
+          <TextInput style={[styles.inputAuth, { marginBottom: 16, textAlign: "center" }]} placeholder="Criar palavra-passe (Opcional)" placeholderTextColor={color.textSecondary} secureTextEntry value={senhaFamiliaCriar} onChangeText={setSenhaFamiliaCriar} />
+          
+          <TouchableOpacity 
+            style={[styles.btnAdicionarCarrinho, { backgroundColor: color.tint, marginBottom: 0 }]} 
+            onPress={async () => { 
+              setLoadingFamilia(true);
+              const sucesso = await criarNovaFamiliaComSenha(senhaFamiliaCriar);
+              setLoadingFamilia(false);
+              
+              if (sucesso) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
+                setSenhaFamiliaCriar("");
+              }
+            }}
+          >
+            {loadingFamilia ? <ActivityIndicator color="white" /> : (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="add-circle" size={20} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.textoBotaoBranco}>Criar e Receber Código</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -404,7 +489,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.headerPerfil}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Image source={{ uri: usuario?.foto }} style={styles.fotoPerfilMin} />
+          <Image source={{ uri: usuario?.foto }} style={styles.fotoPerfilMin} contentFit="cover" transition={300} />
           <View>
             <Text style={styles.boasVindas}>Olá, {usuario?.nome}</Text>
             <TouchableOpacity style={styles.pillFamilia} onPress={() => Share.share({ message: `Participe da minha família no Dehouse usando o código: ${familiaId}` })}>
@@ -432,7 +517,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.walletCard, { marginTop: 0 }]}>
+      <View style={[styles.walletCard, { marginTop: 12 }]}>
         <View style={styles.walletHeader}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Ionicons name="card" size={24} color="#FFC857" />
@@ -471,7 +556,6 @@ export default function HomeScreen() {
               onPress={() => { 
                 Haptics.selectionAsync(); 
                 setScannerAtivo(true); 
-                // 🔥 Inicia o Atraso Inteligente (Timer de 1.5s)
                 setScannerPronto(false);
                 setTimeout(() => {
                   setScannerPronto(true);
@@ -490,39 +574,39 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={styles.scannerContainer}>
-          <CameraView style={StyleSheet.absoluteFillObject} facing="back" enableTorch={flashLigado} ref={scannerRef} onBarcodeScanned={modalVisivel || modoTirarFoto ? undefined : handleBarcodeScanned} />
+          <CameraView style={StyleSheet.absoluteFillObject} facing="back" enableTorch={flashLigado} ref={modoTirarFoto ? cameraShotRef : scannerRef} onBarcodeScanned={modalVisivel || modoTirarFoto ? undefined : handleBarcodeScanned} />
+          
           <View style={[StyleSheet.absoluteFillObject, styles.overlayScanner]} pointerEvents="box-none">
             <TouchableOpacity style={styles.btnLanterna} onPress={() => { Haptics.selectionAsync(); setFlashLigado(!flashLigado); }}>
               <Ionicons name={flashLigado ? "flash" : "flash-off"} size={28} color={flashLigado ? "#FFC857" : "white"} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={[styles.btnModoRapido, modoRapido && styles.btnModoRapidoAtivo]} onPress={() => { Haptics.selectionAsync(); setModoRapido(!modoRapido); }}>
-              <Ionicons name="rocket" size={26} color={modoRapido ? "#FFC857" : "white"} />
-              {modoRapido && <Text style={{ color: "#FFC857", fontWeight: "bold", fontSize: 12, marginTop: 4 }}>FLASH ON</Text>}
-            </TouchableOpacity>
+            {!modoTirarFoto && (
+              <TouchableOpacity style={[styles.btnModoRapido, modoRapido && styles.btnModoRapidoAtivo]} onPress={() => { Haptics.selectionAsync(); setModoRapido(!modoRapido); }}>
+                <Ionicons name="rocket" size={26} color={modoRapido ? "#FFC857" : "white"} />
+                {modoRapido && <Text style={{ color: "#FFC857", fontWeight: "bold", fontSize: 12, marginTop: 4 }}>FLASH ON</Text>}
+              </TouchableOpacity>
+            )}
             
-            <TouchableOpacity style={styles.btnFecharScanner} onPress={() => { Haptics.selectionAsync(); setScannerAtivo(false); setFlashLigado(false); setModoRapido(false); }}>
+            <TouchableOpacity style={styles.btnFecharScanner} onPress={() => { Haptics.selectionAsync(); setScannerAtivo(false); setFlashLigado(false); setModoRapido(false); setModoTirarFoto(null); }}>
               <Ionicons name="close-circle" size={36} color="white" />
             </TouchableOpacity>
             
-            {/* 🔥 MIRA DO SCANNER ATUALIZADA */}
-            <View pointerEvents="none" style={styles.miraScanner}>
-              <Ionicons 
-                name="scan-outline" 
-                size={100} 
-                color={scannerPronto ? (modoRapido ? "#FFC857" : "#10B981") : "rgba(255,255,255,0.3)"} 
-              />
-              {!scannerPronto ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 16 }}>
-                  <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
-                  <Text style={{ color: "white", fontWeight: "bold" }}>Focando no código...</Text>
-                </View>
-              ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 16 }}>
-                  <Text style={{ color: "white", fontWeight: "bold" }}>Pronto para Ler!</Text>
-                </View>
-              )}
-            </View>
+            {!modoTirarFoto && (
+              <View pointerEvents="none" style={styles.miraScanner}>
+                <Ionicons name="scan-outline" size={100} color={scannerPronto ? (modoRapido ? "#FFC857" : "#10B981") : "rgba(255,255,255,0.3)"} />
+                {!scannerPronto ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 16 }}>
+                    <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
+                    <Text style={{ color: "white", fontWeight: "bold" }}>Focando no código...</Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 16 }}>
+                    <Text style={{ color: "white", fontWeight: "bold" }}>Pronto para Ler!</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
           </View>
         </View>
@@ -579,9 +663,11 @@ export default function HomeScreen() {
 
       <MercadoModal visivel={modalMercadoVisivel} fecharModal={() => setModalMercadoVisivel(false)} nomeMercado={nomeMercado} setNomeMercado={setNomeMercado} confirmarCompra={confirmarCompraFinal} color={color} styles={styles} />
       <RecargaModal visivel={modalRecargaVisivel} fecharModal={() => { setModalRecargaVisivel(false); setValorRecarga(""); }} tipoOperacao={tipoOperacaoCarteira} valorRecarga={valorRecarga} setValorRecarga={setValorRecarga} confirmarRecarga={gerenciarCarteira} color={color} styles={styles} />
+      
       <ProdutoModal visivel={modalVisivel} fecharModal={fecharModalCadastro} editando={editando} produtoAtual={produtoAtual} setProdutoAtual={setProdutoAtual} precoAnterior={precoAnterior} fotoProduto={fotoProduto} setFotoProduto={setFotoProduto} fotoEtiqueta={fotoEtiqueta} setFotoEtiqueta={setFotoEtiqueta} setFotoAmpliada={setFotoAmpliada} setModoTirarFoto={setModoTirarFoto} salvarNoCarrinho={salvarNoCarrinho} color={color} styles={styles} />
       <FotoAmpliadaModal fotoAmpliada={fotoAmpliada} setFotoAmpliada={setFotoAmpliada} />
       <CameraModal modoTirarFoto={modoTirarFoto} setModoTirarFoto={setModoTirarFoto} flashLigado={flashLigado} setFlashLigado={setFlashLigado} cameraShotRef={cameraShotRef} capturarFotoPelaCamera={capturarFotoPelaCamera} styles={styles} />
+      
       <CalculadoraModal visivel={modalCalcVisivel} fecharModal={() => setModalCalcVisivel(false)} color={color} />
     </SafeAreaView>
   );

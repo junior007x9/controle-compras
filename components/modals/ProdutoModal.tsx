@@ -1,129 +1,225 @@
-import React from 'react';
-import { Modal, KeyboardAvoidingView, View, Text, TextInput, TouchableOpacity, ScrollView, Image, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { CATEGORIAS } from '../../constants/Categories';
-import { Produto, PrecoAnterior } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Keyboard,
+  TouchableWithoutFeedback,
+  StyleSheet
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface ProdutoModalProps {
-  visivel: boolean;
-  fecharModal: () => void;
-  editando: boolean;
-  produtoAtual: Produto;
-  setProdutoAtual: (produto: Produto) => void;
-  precoAnterior: PrecoAnterior | null;
-  fotoProduto: { uri: string } | null;
-  setFotoProduto: (foto: { uri: string } | null) => void;
-  fotoEtiqueta: { uri: string } | null;
-  setFotoEtiqueta: (foto: { uri: string } | null) => void;
-  setFotoAmpliada: (uri: string) => void;
-  setModoTirarFoto: (modo: "produto" | "etiqueta") => void;
-  salvarNoCarrinho: () => void;
-  color: any;
-  styles: any;
-}
+export function ProdutoModal({
+  visivel,
+  fecharModal,
+  editando,
+  produtoAtual,
+  setProdutoAtual,
+  precoAnterior,
+  fotoProduto,
+  fotoEtiqueta,
+  setModoTirarFoto,
+  salvarNoCarrinho,
+  color,
+}: any) {
+  const insets = useSafeAreaInsets();
+  const [usarCalcPeso, setUsarCalcPeso] = useState(false);
+  const [precoKg, setPrecoKg] = useState("");
+  const [pesoGramas, setPesoGramas] = useState("");
 
-export const ProdutoModal = ({
-  visivel, fecharModal, editando, produtoAtual, setProdutoAtual, precoAnterior,
-  fotoProduto, setFotoProduto, fotoEtiqueta, setFotoEtiqueta, setFotoAmpliada,
-  setModoTirarFoto, salvarNoCarrinho, color, styles
-}: ProdutoModalProps) => {
+  useEffect(() => {
+    if (usarCalcPeso && precoKg && pesoGramas) {
+      const precoPorKgNum = parseFloat(precoKg.replace(",", "."));
+      const pesoGramasNum = parseFloat(pesoGramas.replace(",", "."));
+      
+      if (!isNaN(precoPorKgNum) && !isNaN(pesoGramasNum)) {
+        const valorFinal = (precoPorKgNum * pesoGramasNum) / 1000;
+        setProdutoAtual({ ...produtoAtual, preco: valorFinal.toFixed(2), qtd: "1" });
+      }
+    }
+  }, [precoKg, pesoGramas, usarCalcPeso]);
+
+  const categorias = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
+
   return (
-    <Modal visible={visivel} animationType="slide" transparent={true} onRequestClose={fecharModal}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
-        <View style={styles.modalContent}>
-          <View style={styles.dragPill} />
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitulo}>{editando ? "Editar Produto" : "Detalhes do Produto"}</Text>
-            <TouchableOpacity onPress={fecharModal} style={styles.btnClose}>
-              <Ionicons name="close" size={24} color={color.textSecondary} />
-            </TouchableOpacity>
-          </View>
+    <Modal visible={visivel} transparent={true} animationType="slide" onRequestClose={fecharModal}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        /* 🔥 AQUI ESTÁ A MAGIA: No Android usamos 'undefined' para parar a tremedeira do ecrã! */
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalContent, { backgroundColor: color.card, borderColor: color.border, paddingBottom: Math.max(insets.bottom + 20, 24) }]}>
+              
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: color.text }]}>
+                  {editando ? "Editar Produto" : "Novo Produto"}
+                </Text>
+                <TouchableOpacity onPress={fecharModal} style={{ padding: 4 }}>
+                  <Ionicons name="close" size={28} color={color.textSecondary} />
+                </TouchableOpacity>
+              </View>
 
-          <ScrollView style={styles.modalForm} contentContainerStyle={{ paddingBottom: 250 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {precoAnterior && (
-              <View style={styles.alertaInflacao}>
-                <Ionicons name="analytics" size={24} color="#1E1E1E" />
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.textoInflacao}>
-                    Última compra: <Text style={{ fontWeight: "bold" }}>R$ {Number(precoAnterior.preco_prateleira).toFixed(2)}</Text> no {precoAnterior.supermercado || "mercado"}
-                  </Text>
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 100 }}
+              >
+                <Text style={[styles.label, { color: color.textSecondary }]}>Nome do Produto</Text>
+                <TextInput
+                  style={[styles.inputLarge, { backgroundColor: color.background, color: color.text }]}
+                  placeholder="Ex: Arroz 5kg"
+                  placeholderTextColor={color.textSecondary}
+                  value={produtoAtual.nome}
+                  onChangeText={(t) => setProdutoAtual({ ...produtoAtual, nome: t })}
+                />
 
-                  {produtoAtual.preco && parseFloat(produtoAtual.preco) > 0 ? (() => {
-                    const precoAtualNum = parseFloat(produtoAtual.preco.replace(",", "."));
-                    const precoAntigoNum = Number(precoAnterior.preco_prateleira);
-                    if (precoAtualNum > precoAntigoNum) {
-                      const dif = ((precoAtualNum - precoAntigoNum) / precoAntigoNum) * 100;
-                      return <Text style={{ color: "#EF4444", fontWeight: "bold", fontSize: 13, marginTop: 2 }}>📈 Subiu {dif.toFixed(1)}%</Text>;
-                    } else if (precoAtualNum < precoAntigoNum) {
-                      const dif = ((precoAntigoNum - precoAtualNum) / precoAntigoNum) * 100;
-                      return <Text style={{ color: "#2ED1B2", fontWeight: "bold", fontSize: 13, marginTop: 2 }}>📉 Caiu {dif.toFixed(1)}%</Text>;
-                    }
-                    return <Text style={{ color: "#1E1E1E", fontWeight: "bold", fontSize: 13, marginTop: 2 }}>➖ Preço Manteve</Text>;
-                  })() : null}
+                <View style={styles.toggleContainer}>
+                  <TouchableOpacity 
+                    style={[styles.toggleBtn, !usarCalcPeso && { backgroundColor: color.tint }]}
+                    onPress={() => setUsarCalcPeso(false)}
+                  >
+                    <Text style={[styles.toggleText, !usarCalcPeso && { color: "white" }]}>Unidade</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.toggleBtn, usarCalcPeso && { backgroundColor: color.tint }]}
+                    onPress={() => setUsarCalcPeso(true)}
+                  >
+                    <Text style={[styles.toggleText, usarCalcPeso && { color: "white" }]}>Peso (Kg/g)</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-            )}
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.labelField}>CÓDIGO DE BARRAS</Text>
-              <TextInput style={styles.inputModal} placeholderTextColor={color.textSecondary} placeholder="00000000" value={produtoAtual.barras} onChangeText={(t) => setProdutoAtual({ ...produtoAtual, barras: t })} />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.labelField}>NOME DO PRODUTO</Text>
-              <TextInput style={styles.inputModal} placeholderTextColor={color.textSecondary} placeholder="Ex: Arroz 1kg" value={produtoAtual.nome} onChangeText={(t) => setProdutoAtual({ ...produtoAtual, nome: t })} />
-            </View>
-            <View style={styles.rowInputs}>
-              <View style={[styles.inputGroup, { flex: 2, marginRight: 12 }]}>
-                <Text style={styles.labelField}>PREÇO UN/KG (R$)</Text>
-                <TextInput style={styles.inputModal} placeholderTextColor={color.textSecondary} keyboardType="numeric" placeholder="0,00" value={produtoAtual.preco} onChangeText={(t) => setProdutoAtual({ ...produtoAtual, preco: t.replace(",", ".") })} />
-              </View>
-              <View style={[styles.inputGroup, { flex: 1 }]}>
-                <Text style={styles.labelField}>QTD / KG</Text>
-                <TextInput style={styles.inputModal} placeholderTextColor={color.textSecondary} keyboardType="numeric" placeholder="1" value={produtoAtual.qtd} onChangeText={(t) => setProdutoAtual({ ...produtoAtual, qtd: t.replace(",", ".") })} />
-              </View>
-            </View>
-
-            <Text style={styles.labelField}>CATEGORIA</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              {CATEGORIAS.map((cat) => (
-                <TouchableOpacity key={cat} style={[styles.catPill, produtoAtual.categoria === cat && styles.catPillActive]} onPress={() => { Haptics.selectionAsync(); setProdutoAtual({ ...produtoAtual, categoria: cat }); }}>
-                  <Text style={[styles.catText, produtoAtual.categoria === cat && styles.catTextActive]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.labelField}>COMPROVANTES VISUAIS (PROVAS)</Text>
-            <View style={styles.rowFotos}>
-              <View style={styles.boxFotoContainer}>
-                <TouchableOpacity style={styles.boxFoto} onPress={() => { Haptics.selectionAsync(); fotoProduto ? setFotoAmpliada(fotoProduto.uri) : setModoTirarFoto("produto"); }}>
-                  {fotoProduto ? (<Image source={{ uri: fotoProduto.uri }} style={styles.imagePreview} />) : (<><Ionicons name="cube-outline" size={28} color={color.info} /><Text style={styles.textBtnFoto}>Produto</Text></>)}
-                </TouchableOpacity>
-                {fotoProduto && (
-                  <TouchableOpacity style={styles.btnRemoverFoto} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFotoProduto(null); }}>
-                    <Ionicons name="close" size={16} color="white" />
-                  </TouchableOpacity>
+                {usarCalcPeso ? (
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Preço do Kg (R$)</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: color.background, color: color.text }]}
+                        placeholder="0,00"
+                        placeholderTextColor={color.textSecondary}
+                        keyboardType="numeric"
+                        value={precoKg}
+                        onChangeText={setPrecoKg}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Peso (Gramas)</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: color.background, color: color.text }]}
+                        placeholder="Ex: 450"
+                        placeholderTextColor={color.textSecondary}
+                        keyboardType="numeric"
+                        value={pesoGramas}
+                        onChangeText={setPesoGramas}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Preço (R$)</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: color.background, color: color.text }]}
+                        placeholder="0,00"
+                        placeholderTextColor={color.textSecondary}
+                        keyboardType="numeric"
+                        value={produtoAtual.preco}
+                        onChangeText={(t) => setProdutoAtual({ ...produtoAtual, preco: t })}
+                      />
+                    </View>
+                    <View style={{ width: 80 }}>
+                      <Text style={[styles.label, { color: color.textSecondary }]}>Qtd</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: color.background, color: color.text, textAlign: "center" }]}
+                        keyboardType="numeric"
+                        value={produtoAtual.qtd}
+                        onChangeText={(t) => setProdutoAtual({ ...produtoAtual, qtd: t })}
+                      />
+                    </View>
+                  </View>
                 )}
-              </View>
 
-              <View style={styles.boxFotoContainer}>
-                <TouchableOpacity style={styles.boxFoto} onPress={() => { Haptics.selectionAsync(); fotoEtiqueta ? setFotoAmpliada(fotoEtiqueta.uri) : setModoTirarFoto("etiqueta"); }}>
-                  {fotoEtiqueta ? (<Image source={{ uri: fotoEtiqueta.uri }} style={styles.imagePreview} />) : (<><Ionicons name="pricetag-outline" size={28} color={color.info} /><Text style={styles.textBtnFoto}>Etiqueta</Text></>)}
-                </TouchableOpacity>
-                {fotoEtiqueta && (
-                  <TouchableOpacity style={styles.btnRemoverFoto} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFotoEtiqueta(null); }}>
-                    <Ionicons name="close" size={16} color="white" />
-                  </TouchableOpacity>
+                {precoAnterior && (
+                  <View style={styles.precoAnteriorBox}>
+                    <Ionicons name="information-circle" size={20} color="#FFC857" style={{ marginRight: 8 }} />
+                    <Text style={{ color: color.text, fontSize: 12, flex: 1 }}>
+                      Última vez pagaste <Text style={{ fontWeight: "bold" }}>R$ {Number(precoAnterior.preco_prateleira).toFixed(2)}</Text> em {precoAnterior.mes_referencia}.
+                    </Text>
+                  </View>
                 )}
-              </View>
-            </View>
 
-            <TouchableOpacity style={styles.btnAdicionarCarrinho} onPress={salvarNoCarrinho}>
-              <Text style={styles.textoBotaoBranco}>{editando ? "Atualizar Carrinho" : "Adicionar ao Carrinho"}</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+                <Text style={[styles.label, { color: color.textSecondary, marginTop: 16 }]}>Categoria</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  {categorias.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.catTag,
+                        { backgroundColor: color.background },
+                        produtoAtual.categoria === cat && { backgroundColor: color.tint, borderColor: color.tint }
+                      ]}
+                      onPress={() => setProdutoAtual({ ...produtoAtual, categoria: cat })}
+                    >
+                      <Text style={[styles.catText, { color: color.textSecondary }, produtoAtual.categoria === cat && { color: "white", fontWeight: "bold" }]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <Text style={[styles.label, { color: color.textSecondary }]}>Comprovativos (Opcional)</Text>
+                <View style={styles.rowFotos}>
+                  <TouchableOpacity style={[styles.btnFoto, { backgroundColor: color.background }]} onPress={() => setModoTirarFoto("produto")}>
+                    {fotoProduto ? <Image source={{ uri: fotoProduto.uri }} style={styles.fotoThumb} /> : <><Ionicons name="camera-outline" size={24} color={color.textSecondary} /><Text style={[styles.textoFoto, { color: color.textSecondary }]}>Foto Produto</Text></>}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnFoto, { backgroundColor: color.background }]} onPress={() => setModoTirarFoto("etiqueta")}>
+                    {fotoEtiqueta ? <Image source={{ uri: fotoEtiqueta.uri }} style={styles.fotoThumb} /> : <><Ionicons name="pricetag-outline" size={24} color={color.textSecondary} /><Text style={[styles.textoFoto, { color: color.textSecondary }]}>Foto Etiqueta</Text></>}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.btnSalvar, { backgroundColor: color.tint }]} 
+                  onPress={salvarNoCarrinho}
+                >
+                  <Text style={styles.btnSalvarTexto}>Adicionar ao Carrinho</Text>
+                </TouchableOpacity>
+
+              </ScrollView>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </Modal>
   );
-};
+}
+
+const styles = StyleSheet.create({
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, maxHeight: "92%", borderWidth: 1 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: "bold" },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
+  inputLarge: { borderRadius: 12, padding: 14, fontSize: 16, marginBottom: 16 },
+  input: { borderRadius: 12, padding: 14, fontSize: 16 },
+  row: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
+  toggleContainer: { flexDirection: "row", backgroundColor: "#F3F4F6", borderRadius: 12, padding: 4, marginBottom: 16 },
+  toggleBtn: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 10 },
+  toggleText: { fontSize: 14, fontWeight: "bold", color: "#666" },
+  precoAnteriorBox: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255, 200, 87, 0.1)", padding: 12, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: "rgba(255, 200, 87, 0.3)" },
+  catTag: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: "transparent" },
+  catText: { fontSize: 13 },
+  rowFotos: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  btnFoto: { flex: 1, height: 80, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "transparent", borderStyle: "dashed" },
+  textoFoto: { fontSize: 12, marginTop: 4 },
+  fotoThumb: { width: "100%", height: "100%", borderRadius: 12 },
+  btnSalvar: { padding: 16, borderRadius: 16, alignItems: "center", marginTop: 10, elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  btnSalvarTexto: { color: "white", fontWeight: "bold", fontSize: 16 },
+});
