@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dehouse Market | O Seu Orçamento Inteligente</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Ícones (FontAwesome) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- AOS Animation Library (CSS) -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    
+    <!-- Configurando as cores exatas do teu App -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#10B981', // Verde Esmeralda
+                        primaryDark: '#059669',
+                        accent: '#FFC857',  // Amarelo Moeda
+                        darkBg: '#1E1E1E',
+                        lightBg: '#F8F9FA'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Animações Customizadas Contínuas -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; overflow-x: hidden; }
+        .hero-gradient { background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%); }
+        
+        /* Efeito de Levitação do Celular */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+
+        /* Efeito de Brilho Pulsante no fundo */
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        .animate-glow { animation: pulseGlow 4s ease-in-out infinite; }
+    </style>
+</head>
+<body class="bg-lightBg text-gray-800 antialiased">
+
+    <!-- Navegação Topo -->
+    <nav class="container mx-auto px-6 py-6 flex justify-between items-center" data-aos="fade-down" data-aos-duration="1000">
+        <div class="flex items-center gap-2 group cursor-pointer">
+            <i class="fas fa-shopping-cart text-primary text-3xl group-hover:rotate-12 transition-transform duration-300"></i>
+            <span class="text-2xl font-black tracking-tight text-gray-900">Dehouse Market</span>
+        </div>
+        <div>
+            <a href="#download" class="bg-primary hover:bg-primaryDark text-white font-bold py-3 px-8 rounded-full transition-all duration-300 shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1 inline-block">
+                Baixar App
+            </a>
+        </div>
+    </nav>
+
+    <!-- Cabeçalho Principal (Hero) -->
+    <section class="hero-gradient py-20 lg:py-28 relative overflow-hidden">
+        <div class="container mx-auto px-6 flex flex-col lg:flex-row items-center">
+            
+            <!-- Textos -->
+            <div class="lg:w-1/2 lg:pr-12 text-center lg:text-left z-10" data-aos="fade-right" data-aos-duration="1200">
+                <div class="inline-block bg-primary/10 text-primary font-bold px-4 py-1 rounded-full mb-6 text-sm border border-primary/20" data-aos="zoom-in" data-aos-delay="300">
+                    🚀 O seu novo assistente de compras
+                </div>
+                <h1 class="text-4xl lg:text-6xl font-black text-gray-900 leading-tight mb-6">
+                    O supermercado nunca mais vai esvaziar a sua carteira.
+                </h1>
+                <p class="text-lg lg:text-xl text-gray-600 mb-10 leading-relaxed" data-aos="fade-up" data-aos-delay="200">
+                    Escaneie códigos de barras, compare preços com o Detetive Inteligente, guarde notas fiscais e partilhe o orçamento com a sua família em tempo real.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start" id="download" data-aos="fade-up" data-aos-delay="400">
+                    <!-- Botão Play Store Animado -->
+                    <a href="#" class="flex items-center justify-center gap-4 bg-darkBg text-white px-8 py-4 rounded-xl hover:bg-black transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-2 group">
+                        <i class="fab fa-google-play text-3xl text-accent group-hover:animate-bounce"></i>
+                        <div class="text-left">
+                            <p class="text-xs text-gray-300 uppercase tracking-wider">Disponível no</p>
+                            <p class="text-xl font-bold group-hover:text-accent transition-colors">Google Play</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Demonstração do Celular Flutuante (Interface Desenhada em Código) -->
+            <div class="lg:w-1/2 mt-16 lg:mt-0 relative flex justify-center z-10" data-aos="fade-left" data-aos-duration="1500">
+                <div class="animate-float">
+                    <div class="w-[300px] h-[600px] bg-gray-900 rounded-[3rem] border-[10px] border-gray-900 shadow-2xl relative overflow-hidden flex flex-col group hover:border-gray-800 transition-colors duration-500 bg-gray-50">
+                        
+                        <!-- Câmera do celular (Notch) -->
+                        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-7 bg-gray-900 rounded-b-3xl z-40"></div>
+                        
+                        <!-- Laser de Scan Passando (Efeito Visual) -->
+                        <div class="absolute top-0 left-0 w-full h-1 bg-primary/80 shadow-[0_0_20px_#10B981] animate-[float_3s_ease-in-out_infinite] z-30 pointer-events-none"></div>
+
+                        <!-- INTERFACE FICTÍCIA DO DEHOUSE (Construída em HTML) -->
+                        <div class="w-full h-full flex flex-col pt-8 relative z-20">
+                            
+                            <!-- Header do App -->
+                            <div class="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-100 shadow-sm">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden border border-gray-300">
+                                        <i class="fas fa-user text-gray-400 text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] text-gray-500 font-medium">Olá,</p>
+                                        <p class="text-xs font-bold text-gray-800">Família Silva</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-bell text-gray-400"></i>
+                            </div>
+
+                            <!-- Cartão Dehouse -->
+                            <div class="p-4">
+                                <div class="bg-[#1E1E1E] rounded-2xl p-4 shadow-xl relative overflow-hidden">
+                                    <div class="absolute -right-4 -top-4 w-20 h-20 bg-white/5 rounded-full"></div>
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <i class="fas fa-credit-card text-[#FFC857] text-sm"></i>
+                                        <span class="text-xs font-semibold text-white">Cartão Dehouse</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-400 mb-1">Saldo Pós-Compra</p>
+                                    <p class="text-xl font-black text-white">R$ 145,10</p>
+                                    <div class="w-full h-1.5 bg-gray-700 rounded-full mt-3 overflow-hidden">
+                                        <div class="h-full bg-primary w-[40%] rounded-full"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Botões de Ação -->
+                            <div class="px-4 flex gap-2 mb-4">
+                                <div class="bg-primary flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-primary/30">
+                                    <i class="fas fa-barcode text-white text-xs"></i>
+                                    <span class="text-[10px] text-white font-bold">Escanear</span>
+                                </div>
+                                <div class="bg-white border border-gray-200 flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-sm">
+                                    <i class="fas fa-keyboard text-gray-600 text-xs"></i>
+                                    <span class="text-[10px] text-gray-600 font-bold">Manual</span>
+                                </div>
+                            </div>
+
+                            <!-- Lista de Compras -->
+                            <div class="px-4 flex-1">
+                                <p class="text-[11px] font-bold text-gray-800 mb-3 tracking-wide">ITENS NO CARRINHO (2)</p>
+                                
+                                <!-- Item 1 -->
+                                <div class="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center mb-2 shadow-sm">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 bg-blue-50 rounded flex items-center justify-center">
+                                            <i class="fas fa-shopping-basket text-blue-400 text-[10px]"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-[11px] font-bold text-gray-800">Arroz Agulhinha 5kg</p>
+                                            <p class="text-[9px] text-gray-500 font-medium mt-0.5">1 un</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs font-bold text-gray-800">R$ 25,90</p>
+                                </div>
+
+                                <!-- Item 2 -->
+                                <div class="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center shadow-sm">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 bg-orange-50 rounded flex items-center justify-center">
+                                            <i class="fas fa-box text-orange-400 text-[10px]"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-[11px] font-bold text-gray-800">Feijão Carioca 1kg</p>
+                                            <p class="text-[9px] text-gray-500 font-medium mt-0.5">2 un</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs font-bold text-gray-800">R$ 14,50</p>
+                                </div>
+                            </div>
+
+                            <!-- Barra Inferior -->
+                            <div class="bg-white border-t border-gray-200 p-4 pb-6 flex justify-between items-center mt-auto shadow-[0_-4px_10px_rgba(0,0,0,0.03)] rounded-b-[2.5rem]">
+                                <div>
+                                    <p class="text-[10px] text-gray-500 font-medium">Total Previsto</p>
+                                    <p class="text-lg font-black text-gray-900">R$ 40,40</p>
+                                </div>
+                                <div class="bg-[#1E1E1E] px-5 py-2.5 rounded-full flex items-center gap-2">
+                                    <span class="text-[11px] text-white font-bold">Finalizar</span>
+                                    <i class="fas fa-credit-card text-white text-[10px]"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Bolhas Coloridas de Fundo Animadas -->
+                <div class="absolute -z-10 w-72 h-72 bg-primary rounded-full mix-blend-multiply filter blur-3xl animate-glow top-10 right-10"></div>
+                <div class="absolute -z-10 w-72 h-72 bg-accent rounded-full mix-blend-multiply filter blur-3xl animate-glow bottom-10 left-10" style="animation-delay: 2s;"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Secção de Funcionalidades -->
+    <section class="py-24 bg-white overflow-hidden">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16 max-w-2xl mx-auto" data-aos="fade-up">
+                <h2 class="text-3xl lg:text-4xl font-black text-gray-900">Tecnologia ao serviço do seu bolso</h2>
+                <p class="text-gray-500 mt-4 text-lg">Esqueça o papel, a caneta e a calculadora do telemóvel. O Dehouse automatiza a pior parte das compras.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Card 1 -->
+                <div class="p-8 rounded-3xl bg-lightBg border border-gray-100 hover:shadow-2xl hover:border-primary/50 transition-all duration-300 hover:-translate-y-2 group" data-aos="fade-up" data-aos-delay="100">
+                    <div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-colors duration-300">
+                        <i class="fas fa-barcode text-primary text-2xl group-hover:text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-gray-900">Leitor Inteligente</h3>
+                    <p class="text-gray-600 leading-relaxed">Escaneie códigos de barras no mercado para puxar os produtos diretamente da internet para o seu carrinho.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="p-8 rounded-3xl bg-lightBg border border-gray-100 hover:shadow-2xl hover:border-accent/50 transition-all duration-300 hover:-translate-y-2 group" data-aos="fade-up" data-aos-delay="200">
+                    <div class="w-14 h-14 bg-accent/20 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-accent transition-colors duration-300">
+                        <i class="fas fa-search-dollar text-yellow-600 text-2xl group-hover:text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-gray-900">Detetive de Preços</h3>
+                    <p class="text-gray-600 leading-relaxed">Saiba na hora se o preço da prateleira está mais caro ou mais barato do que na sua última compra.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="p-8 rounded-3xl bg-lightBg border border-gray-100 hover:shadow-2xl hover:border-blue-500/50 transition-all duration-300 hover:-translate-y-2 group" data-aos="fade-up" data-aos-delay="300">
+                    <div class="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-500 transition-colors duration-300">
+                        <i class="fas fa-users text-blue-500 text-2xl group-hover:text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-gray-900">Família Sincronizada</h3>
+                    <p class="text-gray-600 leading-relaxed">Crie uma família com os seus entes queridos e partilhem o carrinho e o orçamento ao mesmo tempo.</p>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="p-8 rounded-3xl bg-lightBg border border-gray-100 hover:shadow-2xl hover:border-red-500/50 transition-all duration-300 hover:-translate-y-2 group" data-aos="fade-up" data-aos-delay="400">
+                    <div class="w-14 h-14 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-red-500 transition-colors duration-300">
+                        <i class="fas fa-file-pdf text-red-500 text-2xl group-hover:text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-gray-900">Gráficos & PDFs</h3>
+                    <p class="text-gray-600 leading-relaxed">Analise os seus gastos com gráficos de pizza e exporte extratos lindos em PDF para o WhatsApp.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Secção Sefaz (Gaveta de Notas) -->
+    <section class="py-24 bg-darkBg text-white relative overflow-hidden">
+        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')]"></div>
+        <div class="container mx-auto px-6 flex flex-col lg:flex-row items-center justify-between relative z-10">
+            <div class="lg:w-1/2 mb-12 lg:mb-0" data-aos="fade-right" data-aos-duration="1000">
+                <div class="inline-block border border-info text-blue-400 font-bold px-4 py-1 rounded-full mb-6 text-sm bg-blue-500/10">
+                    Importação Nativa
+                </div>
+                <h2 class="text-3xl lg:text-5xl font-black mb-6 leading-tight">A sua Gaveta de<br>Notas Fiscais</h2>
+                <p class="text-gray-400 text-lg mb-8 leading-relaxed">
+                    Não perca horas a digitar as suas despesas. O Dehouse integra um robô inteligente que lê a chave de 44 números da Secretaria da Fazenda (Sefaz) e puxa todos os produtos mágicamente.
+                </p>
+                <div class="flex gap-4 items-center mb-8 hover:translate-x-2 transition-transform cursor-default">
+                    <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center"><i class="fas fa-check text-primary"></i></div>
+                    <p class="font-semibold">Importação 100% Blindada e Segura</p>
+                </div>
+                <div class="flex gap-4 items-center hover:translate-x-2 transition-transform cursor-default">
+                    <div class="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center"><i class="fas fa-cloud text-accent"></i></div>
+                    <p class="font-semibold">Criação de Histórico Offline e Online</p>
+                </div>
+            </div>
+            
+            <!-- Painel Demonstrativo Animado -->
+            <div class="lg:w-5/12 bg-[#2A2A2A] p-8 rounded-3xl border border-white/10 shadow-2xl hover:shadow-primary/20 transition-shadow duration-500" data-aos="zoom-in-up" data-aos-duration="1200">
+                <div class="flex items-center justify-between mb-8 border-b border-white/10 pb-6">
+                    <div class="flex items-center gap-4">
+                        <div class="p-3 bg-blue-500/20 rounded-xl animate-pulse"><i class="fas fa-receipt text-2xl text-blue-400"></i></div>
+                        <div>
+                            <h4 class="font-bold text-xl text-white">Nota Importada</h4>
+                            <p class="text-sm text-gray-400">Mercado Local • Hoje</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-4 mb-8">
+                    <div class="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg transition-colors">
+                        <span class="text-gray-300">1x Arroz Agulhinha 5kg</span>
+                        <span class="font-bold">R$ 25,90</span>
+                    </div>
+                    <div class="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg transition-colors">
+                        <span class="text-gray-300">2x Feijão Carioca 1kg</span>
+                        <span class="font-bold">R$ 14,50</span>
+                    </div>
+                    <div class="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg transition-colors">
+                        <span class="text-gray-300">1x Leite Integral</span>
+                        <span class="font-bold">R$ 5,20</span>
+                    </div>
+                </div>
+
+                <div class="bg-primary/20 p-4 rounded-xl flex justify-between items-center border border-primary/30 transform hover:scale-105 transition-transform duration-300">
+                    <span class="text-primary font-bold">Total Salvo</span>
+                    <span class="text-2xl font-black text-primary">R$ 45,60</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Rodapé -->
+    <footer class="bg-gray-50 py-12 border-t border-gray-200">
+        <div class="container mx-auto px-6 text-center" data-aos="fade-up">
+            <div class="flex items-center justify-center gap-2 mb-6">
+                <i class="fas fa-shopping-cart text-primary text-2xl"></i>
+                <span class="text-2xl font-black text-gray-900">Dehouse Market</span>
+            </div>
+            <p class="text-gray-500 mb-8 font-medium">Simplificando as suas compras. Protegendo o seu bolso.</p>
+            
+            <div class="flex justify-center gap-6 text-gray-400 mb-8">
+                <a href="#" class="hover:text-primary hover:-translate-y-2 transition-all duration-300"><i class="fab fa-instagram text-3xl"></i></a>
+                <a href="#" class="hover:text-blue-600 hover:-translate-y-2 transition-all duration-300"><i class="fab fa-linkedin text-3xl"></i></a>
+                <a href="#" class="hover:text-gray-900 hover:-translate-y-2 transition-all duration-300"><i class="fab fa-github text-3xl"></i></a>
+            </div>
+            
+            <div class="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-center items-center gap-4 text-sm text-gray-400">
+                <p>© 2026 Dehouse Market. Produzido com ❤️ em Timon, MA.</p>
+                <span class="hidden md:inline">•</span>
+                <a href="#" class="hover:text-primary transition-colors">Política de Privacidade</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Script da Biblioteca de Animação AOS -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        // Inicializar as animações quando o scroll acontecer
+        AOS.init({
+            once: true, // A animação só acontece uma vez ao fazer scroll para baixo
+            offset: 100 // Distância em pixels antes da animação começar
+        });
+    </script>
+</body>
+</html>

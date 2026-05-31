@@ -15,6 +15,28 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+
+// 🔥 O CÉREBRO: Dicionário Inteligente importado do Planejamento
+const DICIONARIO_INTELIGENTE: Record<string, string[]> = {
+  Alimentação: [
+    "arroz", "feijão", "macarrão", "carne", "frango", "peixe", "ovo", "óleo", "azeite",
+    "sal", "açúcar", "café", "pão", "bolo", "bolacha", "biscoito", "queijo", "presunto",
+    "manteiga", "margarina", "iogurte", "fruta", "legume", "verdura", "batata", "cebola",
+    "alho", "tomate", "farinha", "leite em pó", "molho"
+  ],
+  Limpeza: [
+    "sabão", "detergente", "amaciante", "desinfetante", "esponja", "vassoura", "rodo", 
+    "saco", "lixo", "cloro", "água sanitária", "desengordurante", "pano", "multiuso", "álcool"
+  ],
+  Higiene: [
+    "shampoo", "condicionador", "sabonete", "pasta", "escova", "desodorante", "papel higiênico", 
+    "absorvente", "barbeador", "fio dental", "cotonete", "creme", "fralda", "lenço"
+  ],
+  Bebidas: [
+    "leite", "refrigerante", "suco", "água", "cerveja", "vinho", "chá", "energético", "vodka", "licor"
+  ],
+};
 
 export function ProdutoModal({
   visivel,
@@ -34,6 +56,27 @@ export function ProdutoModal({
   const [precoKg, setPrecoKg] = useState("");
   const [pesoGramas, setPesoGramas] = useState("");
 
+  const categorias = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
+
+  // 🧠 OLHEIRO INTELIGENTE: Fica a vigiar o nome do produto enquanto digitas
+  useEffect(() => {
+    if (produtoAtual.nome) {
+      const textoMinusculo = produtoAtual.nome.toLowerCase();
+      
+      for (const [categoria, palavras] of Object.entries(DICIONARIO_INTELIGENTE)) {
+        if (palavras.some((palavra) => textoMinusculo.includes(palavra))) {
+          // Só muda se a categoria for diferente da atual, para evitar loops
+          if (produtoAtual.categoria !== categoria) {
+            setProdutoAtual((prev: any) => ({ ...prev, categoria: categoria }));
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Dá uma micro vibração quando adivinha!
+          }
+          break; // Se encontrou, para de procurar
+        }
+      }
+    }
+  }, [produtoAtual.nome]);
+
+  // Cálculos de Peso/Unidade originais mantidos
   useEffect(() => {
     if (usarCalcPeso && precoKg && pesoGramas) {
       const precoPorKgNum = parseFloat(precoKg.replace(",", "."));
@@ -41,18 +84,15 @@ export function ProdutoModal({
       
       if (!isNaN(precoPorKgNum) && !isNaN(pesoGramasNum)) {
         const valorFinal = (precoPorKgNum * pesoGramasNum) / 1000;
-        setProdutoAtual({ ...produtoAtual, preco: valorFinal.toFixed(2), qtd: "1" });
+        setProdutoAtual((prev: any) => ({ ...prev, preco: valorFinal.toFixed(2), qtd: "1" }));
       }
     }
   }, [precoKg, pesoGramas, usarCalcPeso]);
-
-  const categorias = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 
   return (
     <Modal visible={visivel} transparent={true} animationType="slide" onRequestClose={fecharModal}>
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        /* 🔥 AQUI ESTÁ A MAGIA: No Android usamos 'undefined' para parar a tremedeira do ecrã! */
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -166,7 +206,10 @@ export function ProdutoModal({
                         { backgroundColor: color.background },
                         produtoAtual.categoria === cat && { backgroundColor: color.tint, borderColor: color.tint }
                       ]}
-                      onPress={() => setProdutoAtual({ ...produtoAtual, categoria: cat })}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setProdutoAtual({ ...produtoAtual, categoria: cat });
+                      }}
                     >
                       <Text style={[styles.catText, { color: color.textSecondary }, produtoAtual.categoria === cat && { color: "white", fontWeight: "bold" }]}>
                         {cat}

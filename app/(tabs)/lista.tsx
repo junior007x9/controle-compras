@@ -73,7 +73,7 @@ export default function ListaScreen() {
   const [estaGravando, setEstaGravando] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  // 🔥 NOVOS EVENTOS DO MICROFONE (MODERNO)
+  // 🔥 EVENTOS DO MICROFONE
   useSpeechRecognitionEvent("start", () => setEstaGravando(true));
   useSpeechRecognitionEvent("end", () => setEstaGravando(false));
 
@@ -82,7 +82,7 @@ export default function ListaScreen() {
     if (textoFalado) {
       setNovoItem(textoFalado);
       executarDicionarioLocal(textoFalado);
-      adicionarItem(textoFalado); // Adiciona sozinho sem botão
+      adicionarItem(textoFalado); 
       setEstaGravando(false);
       ExpoSpeechRecognitionModule.stop();
     }
@@ -90,7 +90,6 @@ export default function ListaScreen() {
 
   useSpeechRecognitionEvent("error", (event) => {
     setEstaGravando(false);
-    // Ignora erros comuns de silêncio para não incomodar o usuário
     if (event.error !== "no-speech" && event.error !== "audio-capture") {
       Alert.alert("Aviso de Sistema", `Detalhe técnico: ${event.error}`);
     }
@@ -285,18 +284,39 @@ export default function ListaScreen() {
   }, [lista]);
 
   const renderItem = ({ item }: { item: ChecklistItem }) => (
-    <View style={[styles.itemCard, item.comprado && styles.itemCardComprado]}>
-      <TouchableOpacity style={styles.checkArea} onPress={() => alternarComprado(item.id)} activeOpacity={0.7}>
-        <Ionicons name={item.comprado ? "checkbox" : "square-outline"} size={26} color={item.comprado ? color.tint : color.textSecondary} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.itemNome, item.comprado && styles.itemNomeComprado]}>{item.nome}</Text>
-          <Text style={[styles.itemCategoria, item.comprado && styles.itemCategoriaComprado]}>{item.categoria}</Text>
-        </View>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => removerItem(item.id)} style={styles.btnRemover}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => alternarComprado(item.id)}
+      style={[
+        styles.cardComprovante,
+        { backgroundColor: color.card, borderColor: color.border },
+        item.comprado && styles.cardComprovanteComprado
+      ]}
+    >
+      {/* Ícone Lateral (Caixa de Seleção) */}
+      <View style={[styles.iconeLateral, { backgroundColor: item.comprado ? color.tint + '20' : color.background }]}>
+        <Ionicons name={item.comprado ? "checkbox" : "square-outline"} size={24} color={item.comprado ? color.tint : color.textSecondary} />
+      </View>
+
+      {/* Textos Centrais */}
+      <View style={styles.textosContainer}>
+        <Text style={[styles.nomeItemCard, { color: color.text }, item.comprado && styles.textoRiscado]} numberOfLines={2}>
+          {item.nome}
+        </Text>
+        <Text style={[styles.categoriaItemCard, { color: item.comprado ? color.textSecondary : color.tint }]}>
+          {item.categoria}
+        </Text>
+      </View>
+
+      {/* Botão Apagar Discreto no Canto */}
+      <TouchableOpacity 
+        style={styles.botaoApagarCard} 
+        onPress={() => removerItem(item.id)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
         <Ionicons name="trash-outline" size={20} color={color.danger} />
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -395,15 +415,59 @@ const getStyles = (c: any) =>
     catText: { color: c.textSecondary, fontWeight: "600", fontSize: 13 },
     catTextActive: { color: c.tint },
     listaScroll: { paddingHorizontal: 20, paddingBottom: 40 },
-    itemCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: c.card, padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: c.border },
-    itemCardComprado: { backgroundColor: c.background, opacity: 0.6 },
-    checkArea: { flexDirection: "row", alignItems: "center", flex: 1, gap: 12 },
-    itemNome: { fontSize: 16, color: c.text, fontWeight: "bold", flex: 1 },
-    itemNomeComprado: { textDecorationLine: "line-through", color: c.textSecondary },
-    itemCategoria: { fontSize: 12, color: c.tint, fontWeight: "600", marginTop: 2 },
-    itemCategoriaComprado: { color: c.textSecondary },
-    btnRemover: { padding: 8 },
     emptyState: { alignItems: "center", marginTop: 40, paddingHorizontal: 20 },
     textoVazio: { color: c.text, fontSize: 18, fontWeight: "bold", marginTop: 16, textAlign: "center" },
     subtextoVazio: { color: c.textSecondary, fontSize: 15, marginTop: 8, textAlign: "center", lineHeight: 22 },
+
+    // 🔥 NOVOS ESTILOS DO CARD (Igual ao Carrinho)
+    cardComprovante: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      borderRadius: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      elevation: 2, 
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    },
+    cardComprovanteComprado: {
+      backgroundColor: c.background, 
+      opacity: 0.6,
+      borderColor: c.borderDark,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    iconeLateral: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    textosContainer: {
+      flex: 1,
+      marginRight: 8,
+    },
+    nomeItemCard: {
+      fontSize: 15,
+      fontWeight: 'bold',
+      marginBottom: 4,
+    },
+    textoRiscado: {
+      textDecorationLine: "line-through",
+      color: c.textSecondary,
+    },
+    categoriaItemCard: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    botaoApagarCard: {
+      padding: 6,
+      borderRadius: 8,
+      backgroundColor: 'rgba(255, 0, 0, 0.05)', 
+    }
   });

@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   useColorScheme,
   View,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -21,8 +22,10 @@ import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BannerAd, BannerAdSize, TestIds } from "react-native-google-mobile-ads";
 import { Image } from "expo-image";
+
+// 🔥 IMPORTAÇÃO PARA AS NOTIFICAÇÕES LOCAIS
+import * as Notifications from "expo-notifications";
 
 import { CalculadoraModal } from "../../components/CalculadoraModal";
 import { Colors } from "../../constants/Colors";
@@ -41,6 +44,23 @@ import { RecargaModal } from "../../components/modals/RecargaModal";
 import { ProdutoModal } from "../../components/modals/ProdutoModal";
 import { CameraModal } from "../../components/modals/CameraModal"; 
 import { FotoAmpliadaModal } from "../../components/modals/FotoAmpliadaModal"; 
+
+import { OnboardingModal } from "../../components/modals/OnboardingModal"; 
+import { HistoricoBuscaModal } from "../../components/modals/HistoricoBuscaModal"; 
+
+// Configuração para exibir a notificação mesmo com o app aberto
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+const DIAS_SEMANA = [
+  { id: 1, nome: "Dom" }, { id: 2, nome: "Seg" }, { id: 3, nome: "Ter" },
+  { id: 4, nome: "Qua" }, { id: 5, nome: "Qui" }, { id: 6, nome: "Sex" }, { id: 7, nome: "Sáb" }
+];
 
 export default function HomeScreen() {
   const systemTheme = useColorScheme() ?? "light";
@@ -95,12 +115,83 @@ export default function HomeScreen() {
 
   const [modalCalcVisivel, setModalCalcVisivel] = useState(false);
 
+  // 🔥 ESTADO DO NOVO MODAL
+  const [modalHistoricoVisivel, setModalHistoricoVisivel] = useState(false);
+
   const [fotoProduto, setFotoProduto] = useState<{ uri: string } | null>(null);
   const [fotoEtiqueta, setFotoEtiqueta] = useState<{ uri: string } | null>(null);
   const [modoTirarFoto, setModoTirarFoto] = useState<"produto" | "etiqueta" | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
-  // 🔥 CORREÇÃO: O aplicativo verifica sempre as permissões do microfone, destravando o loop infinito de carregamento
+  const [mostrarTutorial, setMostrarTutorial] = useState(false);
+
+  // 🔥 ESTADOS PARA O LEMBRETE PERSONALIZADO
+  const [modalNotificacaoVisivel, setModalNotificacaoVisivel] = useState(false);
+  const [diaNotificacao, setDiaNotificacao] = useState(6); // Padrão: Sexta (6)
+  const [horaNotificacao, setHoraNotificacao] = useState("17"); // Padrão: 17h
+  const [modalAjudaVisivel, setModalAjudaVisivel] = useState(false);
+
+  // 🔥 LÓGICA DE CARREGAMENTO DAS NOTIFICAÇÕES
+  useEffect(() => {
+    const carregarNotificacoes = async () => {
+      const savedDia = await AsyncStorage.getItem('@dehouse_notificacao_dia');
+      const savedHora = await AsyncStorage.getItem('@dehouse_notificacao_hora');
+      
+      let dia = savedDia ? parseInt(savedDia) : 6;
+      let hora = savedHora ? parseInt(savedHora) : 17;
+      
+      setDiaNotificacao(dia);
+      setHoraNotificacao(hora.toString().padStart(2, '0'));
+
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status === 'granted' && (!savedDia || !savedHora)) {
+        agendarNotificacao(dia, hora);
+      }
+    };
+    carregarNotificacoes();
+  }, []);
+
+  // 🔥 FUNÇÃO QUE AGENDA NO CELULAR DO USUÁRIO
+  const agendarNotificacao = async (dia: number, hora: number) => {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Mercado a caminho? 🛒",
+        body: "Já definiu o seu orçamento no Dehouse? Planeje sua lista agora mesmo e evite surpresas no caixa!",
+        sound: true,
+      },
+      trigger: {
+        weekday: dia,
+        hour: hora,
+        minute: 0,
+        repeats: true,
+      },
+    });
+  };
+
+  // 🔥 SALVAR A PREFERÊNCIA DO USUÁRIO
+  const salvarLembretePersonalizado = async () => {
+    const horaInt = parseInt(horaNotificacao);
+    if (isNaN(horaInt) || horaInt < 0 || horaInt > 23) {
+      Alert.alert("Hora Inválida", "Digite uma hora válida entre 00 e 23.");
+      return;
+    }
+
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert("Permissão Negada", "Precisamos de permissão para enviar lembretes.");
+      return;
+    }
+
+    await AsyncStorage.setItem('@dehouse_notificacao_dia', diaNotificacao.toString());
+    await AsyncStorage.setItem('@dehouse_notificacao_hora', horaInt.toString());
+    await agendarNotificacao(diaNotificacao, horaInt);
+    
+    setModalNotificacaoVisivel(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Lembrete Ativado!", `Avisaremos você toda semana às ${horaInt.toString().padStart(2, '0')}h.`);
+  };
+
   useEffect(() => {
     async function checarPermissaoMic() {
       const { granted } = await Audio.getPermissionsAsync();
@@ -109,19 +200,26 @@ export default function HomeScreen() {
     checarPermissaoMic();
   }, []);
 
+  useEffect(() => {
+    const checarTutorial = async () => {
+      if (familiaId) {
+        const visto = await AsyncStorage.getItem("@dehouse_tutorial_visto");
+        if (!visto) {
+          setMostrarTutorial(true);
+        }
+      }
+    };
+    checarTutorial();
+  }, [familiaId]);
+
   const pedirPermissoesDoSistema = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
     const cameraRes = await requestCameraPermission();
-    
     const micRes = await Audio.requestPermissionsAsync();
     setMicPermissionGranted(micRes.granted);
 
     if (!cameraRes.granted || !micRes.granted) {
-      Alert.alert(
-        "Aviso Importante", 
-        "Para usares as funções de Voz e Escaneamento de Barras, o aplicativo necessita destas permissões. Se o pop-up não abriu, ativa-as nas configurações do teu telemóvel."
-      );
+      Alert.alert("Aviso Importante", "Para usares as funções de Voz e Escaneamento de Barras, o aplicativo necessita destas permissões.");
     }
   };
 
@@ -197,7 +295,7 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => { ip => checarComprasPendentes(); }, []);
+  useEffect(() => { checarComprasPendentes(); }, []);
 
   useEffect(() => {
     if (total > saldo && !alertaDisparado && total > 0 && saldo > 0) {
@@ -498,23 +596,24 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity 
-          onPress={() => { 
-            Alert.alert("Terminar Sessão", "Deseja sair da sua conta?", [
-              { text: "Cancelar", style: "cancel" }, 
-              { 
-                text: "Sair", 
-                style: "destructive", 
-                onPress: () => { 
-                  fazerLogout(); 
-                  useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); 
-                } 
-              }
-            ]); 
-          }}
-        >
-          <Ionicons name="log-out-outline" size={26} color={color.danger} />
-        </TouchableOpacity>
+        
+        {/* 🔥 CABEÇALHO COM O BOTÃO DE AJUDA, SINO E SAIR */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <TouchableOpacity 
+            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: color.tint + '20', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}
+            onPress={() => { Haptics.selectionAsync(); setModalAjudaVisivel(true); }}
+          >
+            <Ionicons name="help-buoy" size={18} color={color.tint} />
+            <Text style={{ color: color.tint, fontWeight: 'bold', marginLeft: 4, fontSize: 13 }}>Ajuda</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setModalNotificacaoVisivel(true); }}>
+            <Ionicons name="notifications-outline" size={26} color={color.tint} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { Alert.alert("Terminar Sessão", "Deseja sair da sua conta?", [{ text: "Cancelar", style: "cancel" }, { text: "Sair", style: "destructive", onPress: () => { fazerLogout(); useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); } }]); }}>
+            <Ionicons name="log-out-outline" size={26} color={color.danger} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.walletCard, { marginTop: 12 }]}>
@@ -571,6 +670,17 @@ export default function HomeScreen() {
               <Text style={styles.textoBotaoAcaoAzul}>Digitar Manual</Text>
             </TouchableOpacity>
           </View>
+
+          {/* 🔥 NOVO BOTÃO DE DETETIVE DE PREÇOS */}
+          <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
+            <TouchableOpacity 
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: color.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: color.border, elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 }} 
+              onPress={() => { Haptics.selectionAsync(); setModalHistoricoVisivel(true); }}
+            >
+              <Ionicons name="search" size={22} color={color.tint} style={{ marginRight: 8 }} />
+              <Text style={{ color: color.text, fontWeight: "bold", fontSize: 16 }}>Detetive de Preços (Histórico)</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <View style={styles.scannerContainer}>
@@ -612,6 +722,7 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* 🔥 PADDING REDUZIDO NA LISTA POIS O BANNER AD FOI REMOVIDO */}
       <View style={styles.listaContainer}>
         <View style={styles.headerLista}>
           <Text style={styles.tituloSecao}>Itens Adicionados ({carrinho.length})</Text>
@@ -626,7 +737,7 @@ export default function HomeScreen() {
           data={carrinho}
           keyExtractor={(item: any) => item.id}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 160 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           renderItem={({ item }) => <CarrinhoItem item={item as Produto} styles={styles} color={color} onEditar={editarItem} onRemover={removerItem} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.tint} />}
           ListEmptyComponent={
@@ -636,11 +747,6 @@ export default function HomeScreen() {
             </View>
           }
         />
-      </View>
-
-      <View style={{ width: "100%", alignItems: "center", backgroundColor: color.card, paddingVertical: 5, position: "absolute", bottom: carrinho.length > 0 ? 80 : 0, zIndex: 1, borderTopWidth: 1, borderColor: color.border }}>
-        <Text style={{ fontSize: 10, color: color.textSecondary, marginBottom: 2 }}>Espaço Publicitário</Text>
-        <BannerAd unitId={__DEV__ ? TestIds.BANNER : "ca-app-pub-5151678673256465/5749519307"} size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} />
       </View>
 
       {carrinho.length > 0 && (
@@ -669,6 +775,194 @@ export default function HomeScreen() {
       <CameraModal modoTirarFoto={modoTirarFoto} setModoTirarFoto={setModoTirarFoto} flashLigado={flashLigado} setFlashLigado={setFlashLigado} cameraShotRef={cameraShotRef} capturarFotoPelaCamera={capturarFotoPelaCamera} styles={styles} />
       
       <CalculadoraModal visivel={modalCalcVisivel} fecharModal={() => setModalCalcVisivel(false)} color={color} />
+      
+      <OnboardingModal visivel={mostrarTutorial} aoFechar={() => setMostrarTutorial(false)} color={color} />
+
+      {/* 🔥 RENDENRIZANDO O MODAL DE BUSCA AQUI */}
+      <HistoricoBuscaModal visivel={modalHistoricoVisivel} fecharModal={() => setModalHistoricoVisivel(false)} color={color} />
+
+      {/* MODAL NOTIFICAÇÕES */}
+      {modalNotificacaoVisivel && (
+        <Modal visible={true} transparent={true} animationType="fade">
+          <View style={localStyles.modalBackdrop}>
+            <View style={[localStyles.modalCard, { backgroundColor: color.card, borderColor: color.border }]}>
+              
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: color.text }}>Lembrete Semanal</Text>
+                <TouchableOpacity onPress={() => setModalNotificacaoVisivel(false)}>
+                  <Ionicons name="close-circle" size={28} color={color.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: color.textSecondary, marginBottom: 20, fontSize: 14 }}>
+                Escolha o dia e a hora em que você costuma ir ao mercado. Enviaremos um lembrete para planejar suas compras!
+              </Text>
+
+              <Text style={{ color: color.text, fontWeight: 'bold', marginBottom: 10 }}>Dia da Semana</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+                {DIAS_SEMANA.map((dia) => (
+                  <TouchableOpacity 
+                    key={dia.id} 
+                    style={[localStyles.pillDia, { backgroundColor: color.background, borderColor: color.border }, diaNotificacao === dia.id && { backgroundColor: color.tint, borderColor: color.tint }]}
+                    onPress={() => { Haptics.selectionAsync(); setDiaNotificacao(dia.id); }}
+                  >
+                    <Text style={[localStyles.textoPillDia, { color: color.textSecondary }, diaNotificacao === dia.id && { color: 'white', fontWeight: 'bold' }]}>
+                      {dia.nome}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Text style={{ color: color.text, fontWeight: 'bold', marginBottom: 10 }}>Hora do Lembrete (00 a 23)</Text>
+              <TextInput
+                style={[localStyles.inputHora, { backgroundColor: color.background, color: color.text, borderColor: color.border }]}
+                keyboardType="numeric"
+                maxLength={2}
+                placeholder="Ex: 17"
+                placeholderTextColor={color.textSecondary}
+                value={horaNotificacao}
+                onChangeText={setHoraNotificacao}
+              />
+
+              <TouchableOpacity style={[localStyles.btnSalvar, { backgroundColor: color.tint }]} onPress={salvarLembretePersonalizado}>
+                <Ionicons name="save-outline" size={20} color="white" style={{ marginRight: 8 }} />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Salvar Lembrete</Text>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* 🔥 O NOVO MODAL "GUIA AMIGO" DA TELA INICIAL */}
+      {modalAjudaVisivel && (
+        <Modal visible={true} transparent={true} animationType="slide">
+          <View style={localStyles.modalBackdrop}>
+            <View style={[localStyles.modalCard, { backgroundColor: color.card, borderColor: color.border, padding: 0, overflow: 'hidden' }]}>
+              
+              <View style={{ backgroundColor: color.tint, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Como usar esta tela?</Text>
+                <TouchableOpacity onPress={() => setModalAjudaVisivel(false)}>
+                  <Ionicons name="close-circle" size={28} color="white" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ padding: 20, maxHeight: 400 }}>
+                
+                <View style={localStyles.helpItem}>
+                  <View style={[localStyles.helpIconWrapper, { backgroundColor: '#FFC857' + '30' }]}>
+                    <Ionicons name="card" size={28} color="#FFC857" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[localStyles.helpTitle, { color: color.text }]}>O seu Cartão Dehouse</Text>
+                    <Text style={{ color: color.textSecondary, fontSize: 13, lineHeight: 18 }}>Clique em "Recarregar" para dizer ao aplicativo quanto dinheiro tem para gastar hoje. Ele vai avisar-lhe se a compra ficar muito cara!</Text>
+                  </View>
+                </View>
+
+                <View style={localStyles.helpItem}>
+                  <View style={[localStyles.helpIconWrapper, { backgroundColor: color.info + '30' }]}>
+                    <Ionicons name="barcode-outline" size={28} color={color.info} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[localStyles.helpTitle, { color: color.text }]}>Escanear ou Digitar</Text>
+                    <Text style={{ color: color.textSecondary, fontSize: 13, lineHeight: 18 }}>Aponte a câmara para o código de barras de um produto para o aplicativo o reconhecer, ou clique em "Digitar Manual" para escrever você mesmo.</Text>
+                  </View>
+                </View>
+
+                <View style={localStyles.helpItem}>
+                  <View style={[localStyles.helpIconWrapper, { backgroundColor: color.tint + '30' }]}>
+                    <Ionicons name="checkmark-circle" size={28} color={color.tint} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[localStyles.helpTitle, { color: color.text }]}>Finalizar Compra</Text>
+                    <Text style={{ color: color.textSecondary, fontSize: 13, lineHeight: 18 }}>Quando chegar à caixa do mercado, clique no grande botão verde em baixo para guardar todos estes produtos no seu Histórico Vitalício.</Text>
+                  </View>
+                </View>
+
+              </ScrollView>
+
+              <TouchableOpacity style={[localStyles.btnEntendi, { backgroundColor: color.background, borderTopColor: color.border, borderTopWidth: 1 }]} onPress={() => setModalAjudaVisivel(false)}>
+                <Text style={{ color: color.tint, fontWeight: 'bold', fontSize: 16 }}>Entendi, obrigado!</Text>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        </Modal>
+      )}
+
     </SafeAreaView>
   );
 }
+
+// Estilos específicos para os modais locais para não quebrar a arquitetura
+const localStyles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    padding: 20
+  },
+  modalCard: {
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    width: '100%',
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  pillDia: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  textoPillDia: {
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  inputHora: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    fontSize: 18,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    width: 80,
+    marginBottom: 24,
+  },
+  btnSalvar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+  },
+  // Estilos do Guia Amigo
+  helpItem: { 
+    flexDirection: 'row', 
+    marginBottom: 20, 
+    alignItems: 'center' 
+  },
+  helpIconWrapper: { 
+    width: 50, 
+    height: 50, 
+    borderRadius: 25, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 15 
+  },
+  helpTitle: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginBottom: 4 
+  },
+  btnEntendi: { 
+    padding: 20, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  }
+});
