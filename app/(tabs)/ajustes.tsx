@@ -25,10 +25,13 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { WebView } from "react-native-webview"; 
 import { Image } from "expo-image";
 
-// 🔥 IMPORTAÇÕES NOVAS PARA O PDF E GRÁFICO
+// 🔥 IMPORTAÇÕES PARA O PDF E GRÁFICO
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { PieChart } from "react-native-chart-kit";
+
+// 🔥 O BOTÃO DE LER NOTA FISCAL
+import { BotaoLerNota } from "../../components/BotaoLerNota";
 
 // 🔥 O MOTOR DE FAZER DINHEIRO (INTERSTITIAL AD)
 import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
@@ -44,7 +47,7 @@ const UFS = ["PI", "MA", "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "
 const screenWidth = Dimensions.get("window").width;
 
 // 💰 ID do Anúncio (Usa o Test ID em ambiente de desenvolvimento)
-const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-5151678673256465/2845620951'; // Substitui pelo teu ID de Interstitial verdadeiro depois
+const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-5151678673256465/2845620951'; 
 const interstitial = InterstitialAd.createForAdRequest(adUnitId, { requestNonPersonalizedAdsOnly: true });
 
 const SkeletonAjustes = ({ color }: { color: any }) => {
@@ -86,10 +89,17 @@ export default function AjustesScreen() {
   const { usuario, familiaId, fazerLogout, sairDaFamilia } = useAuthStore();
   const { sincronizarComNuvem } = useCartStore(); 
 
+  // 🔥 REDIRECIONAMENTO AUTOMÁTICO SE SAIR DA FAMÍLIA OU DA CONTA
+  useEffect(() => {
+    if (!usuario || !familiaId) {
+      router.replace("/");
+    }
+  }, [usuario, familiaId]);
+
   const [loading, setLoading] = useState(true);
   const [gerandoPDF, setGerandoPDF] = useState(false);
   const [stats, setStats] = useState({ totalGastoVida: 0, totalItensVida: 0, categoriaFavorita: "Nenhuma" });
-  const [dadosDoGrafico, setDadosDoGrafico] = useState<any[]>([]); // 🔥 ESTADO PARA O GRÁFICO
+  const [dadosDoGrafico, setDadosDoGrafico] = useState<any[]>([]);
   const [orcamentos, setOrcamentos] = useState<Record<string, string>>({});
   const [salvandoOrcamento, setSalvandoOrcamento] = useState(false);
   const [notasGuardadas, setNotasGuardadas] = useState<any[]>([]);
@@ -97,7 +107,6 @@ export default function AjustesScreen() {
   const [notaSelecionada, setNotaSelecionada] = useState<any>(null);
   const [modalVisualizarNota, setModalVisualizarNota] = useState(false);
 
-  // 🔥 ESTADO DO GUIA AMIGO DOS AJUSTES
   const [modalAjudaVisivel, setModalAjudaVisivel] = useState(false);
 
   const [modalSefazManual, setModalSefazManual] = useState(false);
@@ -107,18 +116,16 @@ export default function AjustesScreen() {
   const [urlSefazWebView, setUrlSefazWebView] = useState<string | null>(null);
   const webViewRef = useRef<any>(null);
 
-  // 💰 ESTADOS DO ANÚNCIO
   const [anuncioPronto, setAnuncioPronto] = useState(false);
 
   useEffect(() => {
-    // Tenta carregar o anúncio silenciosamente quando o ecrã abre
     const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
       setAnuncioPronto(true);
     });
     const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
       setAnuncioPronto(false);
-      gerarPDFHistoricoInterno(); // Gera o PDF assim que o anúncio fecha
-      interstitial.load(); // Carrega o próximo para a próxima vez
+      gerarPDFHistoricoInterno(); 
+      interstitial.load(); 
     });
     
     interstitial.load();
@@ -201,7 +208,6 @@ export default function AjustesScreen() {
         if (value > maxItens) { maxItens = value; favorita = key; } 
       }
 
-      // Preparação para a Biblioteca de Gráfico de Pizza
       const coresDashboard = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
       const arrayGrafico = Object.entries(gastosPorValor).map(([cat, val], index) => ({
         name: cat,
@@ -216,17 +222,15 @@ export default function AjustesScreen() {
     } catch (error) {}
   };
 
-  // 💰 FUNÇÃO GATILHO (Mostra o Anúncio primeiro se existir, senão gera direto)
   const clicarExportarPDF = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (anuncioPronto) {
-      interstitial.show(); // Abre a pub
+      interstitial.show(); 
     } else {
-      gerarPDFHistoricoInterno(); // A pub não carregou (net fraca), gera logo o PDF para não chatear o utilizador
+      gerarPDFHistoricoInterno(); 
     }
   };
 
-  // FUNÇÃO REAL QUE GERA O PDF
   const gerarPDFHistoricoInterno = async () => {
     if (!familiaId) return;
     setGerandoPDF(true);
@@ -320,10 +324,7 @@ export default function AjustesScreen() {
         </html>
       `;
 
-      const { uri } = await Print.printToFileAsync({
-        html,
-        base64: false
-      });
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
 
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
@@ -334,7 +335,6 @@ export default function AjustesScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
       Alert.alert("Erro", "Falha ao gerar o documento PDF.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -436,7 +436,7 @@ export default function AjustesScreen() {
                   args: [familiaId, item.barras || "", item.nome, notaSelecionada.mercado, item.preco, item.preco, dataCalc.toISOString(), mesReferencia, item.categoria || "Outros"],
                 });
               }
-              await turso.execute({ sql: "UPDATE notas_guardadas SET importada = 1 WHERE id = ?", args: [notaSelecionada.id] });
+              await turso.execute({ sql: "UPDATE notas_guardadas SET importada = 1 WHERE id = ?" , args: [notaSelecionada.id] });
               await sincronizarComNuvem(); carregarEstatisticasGlobais(); carregarNotasGuardadas();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("Sucesso!", "Os produtos foram adicionados ao seu Histórico Inteligente!");
@@ -458,7 +458,6 @@ export default function AjustesScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         
-        {/* 🔥 CABEÇALHO COM O BOTÃO DE AJUDA DOS AJUSTES */}
         <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
           <Text style={styles.tituloTela}>Ajustes & Consultas</Text>
           <TouchableOpacity 
@@ -488,7 +487,16 @@ export default function AjustesScreen() {
                   <Ionicons name="home" size={24} color={color.tint} />
                   <Text style={styles.tituloSecao}>Código da Família: <Text style={{ fontWeight: "900" }}>{familiaId}</Text></Text>
                 </View>
-                <TouchableOpacity style={styles.btnDangerOutline} onPress={() => { Alert.alert("Sair da Família", "Certeza?", [{ text: "Cancelar", style: "cancel" }, { text: "Sair", style: "destructive", onPress: () => { sairDaFamilia(); useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); } }]); }}>
+                <TouchableOpacity style={styles.btnDangerOutline} onPress={() => { 
+                    Alert.alert("Sair da Família", "Deseja sair desta família? Terá de inserir um código novamente para voltar.", [
+                        { text: "Cancelar", style: "cancel" }, 
+                        { text: "Sair", style: "destructive", onPress: () => { 
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            sairDaFamilia(); 
+                            useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); 
+                        } }
+                    ]); 
+                }}>
                   <Text style={styles.textDanger}>Sair desta Família</Text>
                 </TouchableOpacity>
               </View>
@@ -501,10 +509,15 @@ export default function AjustesScreen() {
                 </View>
                 <Text style={{ color: color.textSecondary, fontSize: 13, marginBottom: 16, lineHeight: 18 }}>Guarde os seus recibos aqui de forma invisível. Adicione-os ao orçamento apenas se quiser.</Text>
                 
-                {/* 🔥 BOTÃO ÚNICO QUE ABRE O MODAL PARA DIGITAR A CHAVE SEFAZ */}
-                <TouchableOpacity style={[styles.btnAcaoPequeno, { backgroundColor: color.info, marginBottom: 20 }]} onPress={() => { Haptics.selectionAsync(); setModalSefazManual(true); }}>
-                  <Ionicons name="add-circle" size={20} color="white" /><Text style={{ color: 'white', fontWeight: 'bold', marginLeft: 6 }}>Adicionar Nota Sefaz</Text>
-                </TouchableOpacity>
+                {/* 🔥 BOTÕES DE IMPORTAÇÃO (CÂMARA E MANUAL) */}
+                <View style={{ gap: 10, marginBottom: 20 }}>
+                  <BotaoLerNota color={color} />
+                  
+                  <TouchableOpacity style={[styles.btnAcaoPequeno, { backgroundColor: color.background, borderWidth: 1, borderColor: color.info }]} onPress={() => { Haptics.selectionAsync(); setModalSefazManual(true); }}>
+                    <Ionicons name="keypad" size={20} color={color.info} />
+                    <Text style={{ color: color.info, fontWeight: 'bold', marginLeft: 6 }}>Digitar Chave Manualmente</Text>
+                  </TouchableOpacity>
+                </View>
                 
                 {notasGuardadas.map((nota) => (
                   <TouchableOpacity 
@@ -556,7 +569,6 @@ export default function AjustesScreen() {
                 <View style={styles.linhaEstatistica}><Text style={styles.labelEstatistica}>Comprados:</Text><Text style={styles.valorEstatistica}>{stats.totalItensVida} itens</Text></View>
                 <View style={styles.linhaEstatistica}><Text style={styles.labelEstatistica}>Secção favorita:</Text><Text style={styles.valorEstatistica}>{stats.categoriaFavorita}</Text></View>
                 
-                {/* 🔥 A TELA DE DASHBOARD COM GRÁFICO DE PIZZA AQUI */}
                 {dadosDoGrafico.length > 0 ? (
                   <View style={{ alignItems: "center", marginTop: 20, marginBottom: 10 }}>
                     <Text style={{ alignSelf: "flex-start", fontSize: 13, fontWeight: "bold", color: color.textSecondary, marginBottom: 10 }}>PARA ONDE VAI O SEU DINHEIRO?</Text>
@@ -576,7 +588,6 @@ export default function AjustesScreen() {
                   <Text style={{ textAlign: "center", color: color.textSecondary, marginTop: 20, fontStyle: "italic" }}>Faça a sua primeira compra para gerar o gráfico financeiro.</Text>
                 )}
 
-                {/* 💰 BOTÃO COM O GATILHO DA PUBLICIDADE ANTES DO PDF */}
                 <TouchableOpacity 
                   style={[styles.btnAcaoPequeno, { backgroundColor: color.tint, marginTop: 20, paddingVertical: 14 }]} 
                   onPress={clicarExportarPDF}
@@ -603,13 +614,20 @@ export default function AjustesScreen() {
                 <TouchableOpacity style={[styles.themeBtn, temaAtivo === "system" && styles.themeBtnActive]} onPress={() => mudarTema("system")}><Ionicons name="phone-portrait" size={24} color={temaAtivo === "system" ? color.tint : color.textSecondary} /></TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.btnLogout} onPress={() => fazerLogout()}><Ionicons name="log-out" size={24} color="white" /><Text style={{ color: "white", fontWeight: "bold", marginLeft: 10, fontSize: 16 }}>Terminar Sessão</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.btnLogout} onPress={() => { 
+                Alert.alert("Terminar Sessão", "Deseja sair da sua conta inteira?", [
+                    { text: "Cancelar", style: "cancel" }, 
+                    { text: "Sair", style: "destructive", onPress: () => { 
+                        fazerLogout(); 
+                        useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); 
+                    } }
+                ]); 
+              }}><Ionicons name="log-out" size={24} color="white" /><Text style={{ color: "white", fontWeight: "bold", marginLeft: 10, fontSize: 16 }}>Terminar Sessão</Text></TouchableOpacity>
             </>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* MODAL DETALHES NOTA */}
       {modalVisualizarNota && notaSelecionada && (
         <Modal visible={true} transparent={true} animationType="slide">
           <View style={localStyles.modalBackdrop}>
@@ -653,7 +671,6 @@ export default function AjustesScreen() {
         </Modal>
       )}
 
-      {/* MODAL DIGITAR CHAVE MANUAL */}
       {modalSefazManual && (
         <Modal visible={true} transparent={true} animationType="fade">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={localStyles.modalBackdrop}>
@@ -669,7 +686,6 @@ export default function AjustesScreen() {
         </Modal>
       )}
 
-      {/* WEBVIEW EXTRATOR BLINDADO */}
       {urlSefazWebView !== null && (
         <Modal visible={true} animationType="slide" transparent={false}>
           <SafeAreaView style={{ flex: 1, backgroundColor: color.background }}>
@@ -754,7 +770,6 @@ export default function AjustesScreen() {
 
       {loadingSefaz && (<Modal visible={true} transparent={true} animationType="fade"><View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color={color.info} /><Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18, marginTop: 20 }}>Processando...</Text></View></Modal>)}
 
-      {/* 🔥 O NOVO MODAL "GUIA AMIGO" DA TELA DE AJUSTES */}
       {modalAjudaVisivel && (
         <Modal visible={true} transparent={true} animationType="slide">
           <View style={localStyles.modalBackdrop}>

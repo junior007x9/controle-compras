@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -57,10 +57,19 @@ export default function HistoricoScreen() {
   const theme = temaAtivo === "system" ? systemTheme : temaAtivo;
   const color = Colors[theme];
   const styles = useMemo(() => getStyles(color), [color]);
+  const router = useRouter();
 
   const historicoGlobal = useCartStore((state) => state.historico);
   const sincronizarComNuvem = useCartStore((state) => state.sincronizarComNuvem);
   const familiaId = useAuthStore((state) => state.familiaId);
+  const usuario = useAuthStore((state) => state.usuario);
+
+  // 🔥 REDIRECIONAMENTO AUTOMÁTICO SE SAIR DA FAMÍLIA
+  useEffect(() => {
+    if (!usuario || !familiaId) {
+      router.replace("/");
+    }
+  }, [usuario, familiaId]);
 
   const [loading, setLoading] = useState(true);
   const [mesOffset, setMesOffset] = useState(0);
@@ -79,14 +88,12 @@ export default function HistoricoScreen() {
   const mesVisual = `${String(dataCalc.getMonth() + 1).padStart(2, "0")}/${dataCalc.getFullYear()}`;
   const mesQuery = `${String(dataCalc.getMonth() + 1).padStart(2, "0")}-${dataCalc.getFullYear()}`;
 
-  // 1. Agrupar compras por Nota/Supermercado (As que vêm do Extrator vão agrupar perfeitamente porque têm a mesma data exata)
   const historicoAgrupado = useMemo(() => {
     const doMes = historicoGlobal.filter((i: any) => i.mes_referencia === mesQuery && i.familia_id === familiaId);
     
     const grupos: Record<string, any> = {};
 
     doMes.forEach((item: any) => {
-      // Usa a data completa para agrupar (Itens da mesma nota terão a exata mesma data gerada no Extrator)
       const chave = `${item.supermercado || "Desconhecido"}_${item.data_compra || "manual"}`;
       
       let precoNum = Number(item.preco_prateleira) || 0;

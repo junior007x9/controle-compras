@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -62,8 +62,16 @@ export default function ListaScreen() {
   const theme = temaAtivo === "system" ? systemTheme : temaAtivo;
   const color = Colors[theme];
   const styles = useMemo(() => getStyles(color), [color]);
+  const router = useRouter();
 
-  const { familiaId } = useAuthStore();
+  const { familiaId, usuario } = useAuthStore();
+
+  // 🔥 REDIRECIONAMENTO AUTOMÁTICO SE SAIR DA FAMÍLIA
+  useEffect(() => {
+    if (!usuario || !familiaId) {
+      router.replace("/");
+    }
+  }, [usuario, familiaId]);
 
   const [novoItem, setNovoItem] = useState("");
   const [categoriaAtual, setCategoriaAtual] = useState("Alimentação");
@@ -73,7 +81,6 @@ export default function ListaScreen() {
   const [estaGravando, setEstaGravando] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  // 🔥 EVENTOS DO MICROFONE
   useSpeechRecognitionEvent("start", () => setEstaGravando(true));
   useSpeechRecognitionEvent("end", () => setEstaGravando(false));
 
@@ -293,12 +300,10 @@ export default function ListaScreen() {
         item.comprado && styles.cardComprovanteComprado
       ]}
     >
-      {/* Ícone Lateral (Caixa de Seleção) */}
       <View style={[styles.iconeLateral, { backgroundColor: item.comprado ? color.tint + '20' : color.background }]}>
         <Ionicons name={item.comprado ? "checkbox" : "square-outline"} size={24} color={item.comprado ? color.tint : color.textSecondary} />
       </View>
 
-      {/* Textos Centrais */}
       <View style={styles.textosContainer}>
         <Text style={[styles.nomeItemCard, { color: color.text }, item.comprado && styles.textoRiscado]} numberOfLines={2}>
           {item.nome}
@@ -308,7 +313,6 @@ export default function ListaScreen() {
         </Text>
       </View>
 
-      {/* Botão Apagar Discreto no Canto */}
       <TouchableOpacity 
         style={styles.botaoApagarCard} 
         onPress={() => removerItem(item.id)}
@@ -418,8 +422,6 @@ const getStyles = (c: any) =>
     emptyState: { alignItems: "center", marginTop: 40, paddingHorizontal: 20 },
     textoVazio: { color: c.text, fontSize: 18, fontWeight: "bold", marginTop: 16, textAlign: "center" },
     subtextoVazio: { color: c.textSecondary, fontSize: 15, marginTop: 8, textAlign: "center", lineHeight: 22 },
-
-    // 🔥 NOVOS ESTILOS DO CARD (Igual ao Carrinho)
     cardComprovante: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -40,6 +40,9 @@ import { checarPrecoAnterior, processarCompra } from "../../services/dbService";
 import { CarrinhoItem } from "../../components/CarrinhoItem";
 import { getStyles } from "../../styles/homeStyles";
 
+// 🔥 O BOTÃO DE LER NOTA FISCAL
+import { BotaoLerNota } from "../../components/BotaoLerNota";
+
 import { MercadoModal } from "../../components/modals/MercadoModal";
 import { RecargaModal } from "../../components/modals/RecargaModal";
 import { ProdutoModal } from "../../components/modals/ProdutoModal";
@@ -116,7 +119,6 @@ export default function HomeScreen() {
 
   const [modalCalcVisivel, setModalCalcVisivel] = useState(false);
 
-  // 🔥 ESTADO DO NOVO MODAL
   const [modalHistoricoVisivel, setModalHistoricoVisivel] = useState(false);
 
   const [fotoProduto, setFotoProduto] = useState<{ uri: string } | null>(null);
@@ -126,13 +128,11 @@ export default function HomeScreen() {
 
   const [mostrarTutorial, setMostrarTutorial] = useState(false);
 
-  // 🔥 ESTADOS PARA O LEMBRETE PERSONALIZADO
   const [modalNotificacaoVisivel, setModalNotificacaoVisivel] = useState(false);
-  const [diaNotificacao, setDiaNotificacao] = useState(6); // Padrão: Sexta (6)
-  const [horaNotificacao, setHoraNotificacao] = useState("17"); // Padrão: 17h
+  const [diaNotificacao, setDiaNotificacao] = useState(6); 
+  const [horaNotificacao, setHoraNotificacao] = useState("17"); 
   const [modalAjudaVisivel, setModalAjudaVisivel] = useState(false);
 
-  // 🔥 LÓGICA DE CARREGAMENTO DAS NOTIFICAÇÕES
   useEffect(() => {
     const carregarNotificacoes = async () => {
       const savedDia = await AsyncStorage.getItem('@dehouse_notificacao_dia');
@@ -152,7 +152,6 @@ export default function HomeScreen() {
     carregarNotificacoes();
   }, []);
 
-  // 🔥 FUNÇÃO QUE AGENDA NO CELULAR DO USUÁRIO
   const agendarNotificacao = async (dia: number, hora: number) => {
     await Notifications.cancelAllScheduledNotificationsAsync();
     await Notifications.scheduleNotificationAsync({
@@ -170,7 +169,6 @@ export default function HomeScreen() {
     });
   };
 
-  // 🔥 SALVAR A PREFERÊNCIA DO USUÁRIO
   const salvarLembretePersonalizado = async () => {
     const horaInt = parseInt(horaNotificacao);
     if (isNaN(horaInt) || horaInt < 0 || horaInt > 23) {
@@ -345,7 +343,7 @@ export default function HomeScreen() {
     if (data.startsWith("http") || data.startsWith("https")) {
       setScannerAtivo(false); setFlashLigado(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Nota Fiscal Detectada", "Para importar Notas Fiscais, vá até a aba 'Ajustes' e abra a sua Gaveta de Notas.");
+      Alert.alert("Nota Fiscal Detectada", "Feche este leitor e use o botão 'Ler Nota Fiscal' na tela inicial para importar a sua nota.");
       setTimeout(() => setTravaScanner(false), 2000);
       return;
     }
@@ -598,7 +596,7 @@ export default function HomeScreen() {
           </View>
         </View>
         
-        {/* 🔥 CABEÇALHO COM O BOTÃO DE AJUDA, SINO E SAIR */}
+        {/* 🔥 CABEÇALHO COM O BOTÃO DE AJUDA, SINO, SAIR DA FAMÍLIA E LOGOUT */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <TouchableOpacity 
             style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: color.tint + '20', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 }}
@@ -611,7 +609,21 @@ export default function HomeScreen() {
           <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setModalNotificacaoVisivel(true); }}>
             <Ionicons name="notifications-outline" size={26} color={color.tint} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { Alert.alert("Terminar Sessão", "Deseja sair da sua conta?", [{ text: "Cancelar", style: "cancel" }, { text: "Sair", style: "destructive", onPress: () => { fazerLogout(); useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); } }]); }}>
+
+          <TouchableOpacity onPress={() => { 
+            Alert.alert("Sair da Família", "Deseja sair desta família? Terá de inserir um código novamente para voltar.", [
+              { text: "Cancelar", style: "cancel" }, 
+              { text: "Sair", style: "destructive", onPress: () => { 
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setFamiliaId(""); 
+                useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); 
+              }}
+            ]); 
+          }}>
+            <Ionicons name="exit-outline" size={26} color={color.warning} />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => { Alert.alert("Terminar Sessão", "Deseja sair da sua conta inteira?", [{ text: "Cancelar", style: "cancel" }, { text: "Sair", style: "destructive", onPress: () => { fazerLogout(); useCartStore.setState({ carrinho: [], historico: [], saldo: 0 }); } }]); }}>
             <Ionicons name="log-out-outline" size={26} color={color.danger} />
           </TouchableOpacity>
         </View>
@@ -672,7 +684,12 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 🔥 NOVO BOTÃO DE DETETIVE DE PREÇOS */}
+          {/* 🔥 BOTÃO LER NOTA FISCAL (QR CODE) REINSERIDO COM O COLOR */}
+          <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
+            <BotaoLerNota color={color} />
+          </View>
+
+          {/* 🔥 BOTÃO DE DETETIVE DE PREÇOS */}
           <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
             <TouchableOpacity 
               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: color.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: color.border, elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 }} 
@@ -773,7 +790,7 @@ export default function HomeScreen() {
       {/* 💰 BANNER AD MOB PEQUENO (NO RODAPÉ PERTO DAS TABS) */}
       <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', paddingVertical: 5, backgroundColor: color.background }}>
         <BannerAd
-          unitId={__DEV__ ? TestIds.BANNER : 'ca-app-pub-5151678673256465/COLOQUE_SEUS_NUMEROS_AQUI'}
+          unitId={__DEV__ ? TestIds.BANNER : 'ca-app-pub-5151678673256465/5749519307'}
           size={BannerAdSize.BANNER} 
           requestOptions={{
             requestNonPersonalizedAdsOnly: true,
@@ -792,7 +809,6 @@ export default function HomeScreen() {
       
       <OnboardingModal visivel={mostrarTutorial} aoFechar={() => setMostrarTutorial(false)} color={color} />
 
-      {/* 🔥 RENDENRIZANDO O MODAL DE BUSCA AQUI */}
       <HistoricoBuscaModal visivel={modalHistoricoVisivel} fecharModal={() => setModalHistoricoVisivel(false)} color={color} />
 
       {/* MODAL NOTIFICAÇÕES */}
@@ -908,7 +924,6 @@ export default function HomeScreen() {
   );
 }
 
-// Estilos específicos para os modais locais para não quebrar a arquitetura
 const localStyles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
@@ -955,7 +970,6 @@ const localStyles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
-  // Estilos do Guia Amigo
   helpItem: { 
     flexDirection: 'row', 
     marginBottom: 20, 
