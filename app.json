@@ -3,7 +3,7 @@
     "name": "Dehouse Market",
     "slug": "controle-compras",
     "scheme": "dehousemarket",
-    "version": "1.0.37",
+    "version": "1.0.40",
     "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -57,20 +57,32 @@
         }
       ]
     ],
+    "ios": {
+      "bundleIdentifier": "com.detech.dehousemarket",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "O aplicativo precisa aceder à câmara para escanear códigos de barras e fotografar os preços.",
+        "NSMicrophoneUsageDescription": "O aplicativo precisa de acesso ao microfone para permitir a pesquisa e a adição de produtos por comando de voz."
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.detech.dehousemarket",
-      "versionCode": 50,
+      "versionCode": 53,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
       ]
     },
     "extra": {

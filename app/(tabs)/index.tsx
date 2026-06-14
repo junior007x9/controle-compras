@@ -24,8 +24,9 @@ import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 
-// 🔥 IMPORTAÇÃO PARA AS NOTIFICAÇÕES LOCAIS
+// 🔥 IMPORTAÇÕES
 import * as Notifications from "expo-notifications";
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
 import { CalculadoraModal } from "../../components/CalculadoraModal";
 import { Colors } from "../../constants/Colors";
@@ -722,7 +723,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* 🔥 PADDING REDUZIDO NA LISTA POIS O BANNER AD FOI REMOVIDO */}
+      {/* 🔥 LISTA DE ITENS DO CARRINHO */}
       <View style={styles.listaContainer}>
         <View style={styles.headerLista}>
           <Text style={styles.tituloSecao}>Itens Adicionados ({carrinho.length})</Text>
@@ -749,8 +750,9 @@ export default function HomeScreen() {
         />
       </View>
 
+      {/* 🔥 BOTÃO FINALIZAR COMPRA */}
       {carrinho.length > 0 && (
-        <View style={[styles.footerFloat, { zIndex: 2 }]}>
+        <View style={[styles.footerFloat, { zIndex: 2, bottom: 65 }]}>
           <TouchableOpacity style={styles.btnFinalizar} onPress={abrirFinalizacao} disabled={salvandoBanco}>
             {salvandoBanco ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}><ActivityIndicator color="white" style={{ marginRight: 10 }} /><Text style={styles.textoBotaoBranco}>{statusSalvamento}</Text></View>
@@ -761,11 +763,23 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {/* 🔥 BOTÃO FLUTUANTE DA CALCULADORA COM AJUSTE DE ALTURA DINÂMICO */}
       {!scannerAtivo && (
-        <TouchableOpacity style={[styles.btnCalcFlutuante, { backgroundColor: theme === "dark" ? "#333" : "#1E1E1E" }]} onPress={() => { Haptics.selectionAsync(); setModalCalcVisivel(true); }}>
+        <TouchableOpacity style={[styles.btnCalcFlutuante, { backgroundColor: theme === "dark" ? "#333" : "#1E1E1E", bottom: carrinho.length > 0 ? 140 : 70 }]} onPress={() => { Haptics.selectionAsync(); setModalCalcVisivel(true); }}>
           <Ionicons name="calculator" size={24} color="#FFC857" />
         </TouchableOpacity>
       )}
+
+      {/* 💰 BANNER AD MOB PEQUENO (NO RODAPÉ PERTO DAS TABS) */}
+      <View style={{ alignItems: 'center', justifyContent: 'center', width: '100%', paddingVertical: 5, backgroundColor: color.background }}>
+        <BannerAd
+          unitId={__DEV__ ? TestIds.BANNER : 'ca-app-pub-5151678673256465/COLOQUE_SEUS_NUMEROS_AQUI'}
+          size={BannerAdSize.BANNER} 
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>
 
       <MercadoModal visivel={modalMercadoVisivel} fecharModal={() => setModalMercadoVisivel(false)} nomeMercado={nomeMercado} setNomeMercado={setNomeMercado} confirmarCompra={confirmarCompraFinal} color={color} styles={styles} />
       <RecargaModal visivel={modalRecargaVisivel} fecharModal={() => { setModalRecargaVisivel(false); setValorRecarga(""); }} tipoOperacao={tipoOperacaoCarteira} valorRecarga={valorRecarga} setValorRecarga={setValorRecarga} confirmarRecarga={gerenciarCarteira} color={color} styles={styles} />
