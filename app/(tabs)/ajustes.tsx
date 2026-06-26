@@ -25,15 +25,13 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { WebView } from "react-native-webview"; 
 import { Image } from "expo-image";
 
-// 🔥 IMPORTAÇÕES PARA O PDF E GRÁFICO
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { PieChart } from "react-native-chart-kit";
 
-// 🔥 O BOTÃO DE LER NOTA FISCAL
+// 🔥 O BOTÃO DE QR CODE AQUI NOS AJUSTES
 import { BotaoLerNota } from "../../components/BotaoLerNota";
 
-// 🔥 O MOTOR DE FAZER DINHEIRO (INTERSTITIAL AD)
 import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 
 import { Colors } from "../../constants/Colors";
@@ -46,7 +44,6 @@ const CATEGORIAS = ["Alimentação", "Limpeza", "Higiene", "Bebidas", "Outros"];
 const UFS = ["PI", "MA", "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MG", "MS", "MT", "PA", "PB", "PE", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"];
 const screenWidth = Dimensions.get("window").width;
 
-// 💰 ID do Anúncio (Usa o Test ID em ambiente de desenvolvimento)
 const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-5151678673256465/2845620951'; 
 const interstitial = InterstitialAd.createForAdRequest(adUnitId, { requestNonPersonalizedAdsOnly: true });
 
@@ -89,7 +86,6 @@ export default function AjustesScreen() {
   const { usuario, familiaId, fazerLogout, sairDaFamilia } = useAuthStore();
   const { sincronizarComNuvem } = useCartStore(); 
 
-  // 🔥 REDIRECIONAMENTO AUTOMÁTICO SE SAIR DA FAMÍLIA OU DA CONTA
   useEffect(() => {
     if (!usuario || !familiaId) {
       router.replace("/");
@@ -509,9 +505,9 @@ export default function AjustesScreen() {
                 </View>
                 <Text style={{ color: color.textSecondary, fontSize: 13, marginBottom: 16, lineHeight: 18 }}>Guarde os seus recibos aqui de forma invisível. Adicione-os ao orçamento apenas se quiser.</Text>
                 
-                {/* 🔥 BOTÕES DE IMPORTAÇÃO (CÂMARA E MANUAL) */}
+                {/* 🔥 BOTÕES DE IMPORTAÇÃO DA SEFAZ AQUI NOS AJUSTES */}
                 <View style={{ gap: 10, marginBottom: 20 }}>
-                  <BotaoLerNota color={color} />
+                  <BotaoLerNota color={color} onLerURL={setUrlSefazWebView} />
                   
                   <TouchableOpacity style={[styles.btnAcaoPequeno, { backgroundColor: color.background, borderWidth: 1, borderColor: color.info }]} onPress={() => { Haptics.selectionAsync(); setModalSefazManual(true); }}>
                     <Ionicons name="keypad" size={20} color={color.info} />
@@ -614,6 +610,7 @@ export default function AjustesScreen() {
                 <TouchableOpacity style={[styles.themeBtn, temaAtivo === "system" && styles.themeBtnActive]} onPress={() => mudarTema("system")}><Ionicons name="phone-portrait" size={24} color={temaAtivo === "system" ? color.tint : color.textSecondary} /></TouchableOpacity>
               </View>
 
+              {/* BOTAO SAIR GERAL DA CONTA AQUI NOS AJUSTES */}
               <TouchableOpacity style={styles.btnLogout} onPress={() => { 
                 Alert.alert("Terminar Sessão", "Deseja sair da sua conta inteira?", [
                     { text: "Cancelar", style: "cancel" }, 
@@ -686,11 +683,22 @@ export default function AjustesScreen() {
         </Modal>
       )}
 
+      {/* 🔥 WEBVIEW DA SEFAZ NOS AJUSTES COM USER-AGENT PARA EVITAR O BAD REQUEST */}
       {urlSefazWebView !== null && (
         <Modal visible={true} animationType="slide" transparent={false}>
           <SafeAreaView style={{ flex: 1, backgroundColor: color.background }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: color.card, borderBottomWidth: 1, borderColor: color.border }}><Text style={{ fontWeight: 'bold', fontSize: 16, color: color.text }}>Extrator Dehouse</Text><TouchableOpacity onPress={() => setUrlSefazWebView(null)}><Ionicons name="close-circle" size={32} color={color.danger} /></TouchableOpacity></View>
-            <WebView ref={webViewRef} source={{ uri: urlSefazWebView }} onMessage={(event) => processarExtracaoNativa(event.nativeEvent.data)} startInLoadingState={true} mixedContentMode="always" originWhitelist={['*']} domStorageEnabled={true} javaScriptEnabled={true} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: color.card, borderBottomWidth: 1, borderColor: color.border }}><Text style={{ fontWeight: 'bold', fontSize: 16, color: color.text }}>A Ler Fatura (Sefaz)</Text><TouchableOpacity onPress={() => setUrlSefazWebView(null)}><Ionicons name="close-circle" size={32} color={color.danger} /></TouchableOpacity></View>
+            <WebView 
+              ref={webViewRef} 
+              source={{ uri: urlSefazWebView }} 
+              userAgent="Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+              onMessage={(event) => processarExtracaoNativa(event.nativeEvent.data)} 
+              startInLoadingState={true} 
+              mixedContentMode="always" 
+              originWhitelist={['*']} 
+              domStorageEnabled={true} 
+              javaScriptEnabled={true} 
+            />
             
             <TouchableOpacity 
               style={[localStyles.btnExtrairFlutuante, { backgroundColor: color.info, bottom: Math.max(insets.bottom + 20, 30) }]} 
@@ -786,11 +794,11 @@ export default function AjustesScreen() {
                 
                 <View style={localStyles.helpItem}>
                   <View style={[localStyles.helpIconWrapper, { backgroundColor: color.info + '30' }]}>
-                    <Ionicons name="receipt" size={28} color={color.info} />
+                    <Ionicons name="qr-code-outline" size={28} color={color.info} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[localStyles.helpTitle, { color: color.text }]}>Gaveta de Notas Fiscais</Text>
-                    <Text style={{ color: color.textSecondary, fontSize: 13, lineHeight: 18 }}>Já tem uma nota fiscal do mercado? Clique em "Adicionar Nota Sefaz" e escreva os 44 números que o nosso robô lê os produtos todos e guarda-os para si.</Text>
+                    <Text style={{ color: color.textSecondary, fontSize: 13, lineHeight: 18 }}>Já tem uma nota fiscal do mercado? Leia o QR Code ou escreva os 44 números que o nosso robô lê os produtos todos e guarda-os para si.</Text>
                   </View>
                 </View>
 

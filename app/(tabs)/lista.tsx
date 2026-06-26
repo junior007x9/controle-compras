@@ -66,7 +66,6 @@ export default function ListaScreen() {
 
   const { familiaId, usuario } = useAuthStore();
 
-  // 🔥 REDIRECIONAMENTO AUTOMÁTICO SE SAIR DA FAMÍLIA
   useEffect(() => {
     if (!usuario || !familiaId) {
       router.replace("/");
@@ -134,10 +133,6 @@ export default function ListaScreen() {
       await turso.execute(
         "CREATE TABLE IF NOT EXISTS checklist (id TEXT PRIMARY KEY, nome TEXT, categoria TEXT, comprado INTEGER, familia_id TEXT)",
       );
-
-      try {
-        await turso.execute("ALTER TABLE checklist ADD COLUMN familia_id TEXT");
-      } catch (e) {}
 
       const result = await turso.execute({
         sql: "SELECT * FROM checklist WHERE familia_id = ?",
@@ -227,9 +222,7 @@ export default function ListaScreen() {
         args: [item.id, item.nome, item.categoria, 0, familiaId],
       });
       await AsyncStorage.setItem(`dehouse_checklist_${familiaId}`, JSON.stringify(novaLista));
-    } catch (e) {
-      console.log("Erro ao salvar item", e);
-    }
+    } catch (e) {}
   };
 
   const alternarComprado = async (id: string) => {

@@ -123,7 +123,8 @@ export default function HomeScreen() {
 
   const [fotoProduto, setFotoProduto] = useState<{ uri: string } | null>(null);
   const [fotoEtiqueta, setFotoEtiqueta] = useState<{ uri: string } | null>(null);
-  const [modoTirarFoto, setModoTirarFoto] = useState<"produto" | "etiqueta" | null>(null);
+  // 🔥 Atualizado para aceitar o modo "nota"
+  const [modoTirarFoto, setModoTirarFoto] = useState<"produto" | "etiqueta" | "nota" | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   const [mostrarTutorial, setMostrarTutorial] = useState(false);
@@ -343,7 +344,7 @@ export default function HomeScreen() {
     if (data.startsWith("http") || data.startsWith("https")) {
       setScannerAtivo(false); setFlashLigado(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Nota Fiscal Detectada", "Feche este leitor e use o botão 'Ler Nota Fiscal' na tela inicial para importar a sua nota.");
+      Alert.alert("Nota Fiscal Detectada", "Feche este leitor e use o botão 'Ler QR Code da Nota' na tela inicial para importar a sua nota.");
       setTimeout(() => setTravaScanner(false), 2000);
       return;
     }
@@ -459,6 +460,16 @@ export default function HomeScreen() {
     } finally {
       setSalvandoBanco(false); setStatusSalvamento("");
     }
+  };
+
+  // 🔥 NOVA FUNÇÃO: Processa a URL lida da nota fiscal pela SEFAZ
+  const processarNotaFiscal = (urlSefaz: string) => {
+    console.log("Nota escaneada com sucesso:", urlSefaz);
+    Alert.alert(
+      "URL Capturada!",
+      "A sua nota foi lida. Em breve vamos integrar a IA para raspar os dados deste link:\n\n" + urlSefaz
+    );
+    // Aqui no futuro chamaremos a Cloud Function para extrair os itens
   };
 
   if (!cameraPermission || micPermissionGranted === null) {
@@ -684,9 +695,15 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 🔥 BOTÃO LER NOTA FISCAL (QR CODE) REINSERIDO COM O COLOR */}
+          {/* 🔥 BOTÃO LER NOTA FISCAL (QR CODE) AGORA COM A PROP onPress */}
           <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
-            <BotaoLerNota color={color} />
+            <BotaoLerNota 
+              color={color} 
+              onPress={() => {
+                Haptics.selectionAsync();
+                setModoTirarFoto("nota");
+              }} 
+            />
           </View>
 
           {/* 🔥 BOTÃO DE DETETIVE DE PREÇOS */}
@@ -803,7 +820,18 @@ export default function HomeScreen() {
       
       <ProdutoModal visivel={modalVisivel} fecharModal={fecharModalCadastro} editando={editando} produtoAtual={produtoAtual} setProdutoAtual={setProdutoAtual} precoAnterior={precoAnterior} fotoProduto={fotoProduto} setFotoProduto={setFotoProduto} fotoEtiqueta={fotoEtiqueta} setFotoEtiqueta={setFotoEtiqueta} setFotoAmpliada={setFotoAmpliada} setModoTirarFoto={setModoTirarFoto} salvarNoCarrinho={salvarNoCarrinho} color={color} styles={styles} />
       <FotoAmpliadaModal fotoAmpliada={fotoAmpliada} setFotoAmpliada={setFotoAmpliada} />
-      <CameraModal modoTirarFoto={modoTirarFoto} setModoTirarFoto={setModoTirarFoto} flashLigado={flashLigado} setFlashLigado={setFlashLigado} cameraShotRef={cameraShotRef} capturarFotoPelaCamera={capturarFotoPelaCamera} styles={styles} />
+      
+      {/* 🔥 CAMERA MODAL AGORA COM A PROP onScanNota */}
+      <CameraModal 
+        modoTirarFoto={modoTirarFoto} 
+        setModoTirarFoto={setModoTirarFoto} 
+        flashLigado={flashLigado} 
+        setFlashLigado={setFlashLigado} 
+        cameraShotRef={cameraShotRef} 
+        capturarFotoPelaCamera={capturarFotoPelaCamera} 
+        styles={styles} 
+        onScanNota={processarNotaFiscal} 
+      />
       
       <CalculadoraModal visivel={modalCalcVisivel} fecharModal={() => setModalCalcVisivel(false)} color={color} />
       

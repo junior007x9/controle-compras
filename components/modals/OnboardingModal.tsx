@@ -6,7 +6,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function OnboardingModal({ visivel, aoFechar, color }: any) {
   
-  // Função que guarda na memória do telemóvel que o utilizador já viu o tutorial
   const concluirTutorial = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await AsyncStorage.setItem("@dehouse_tutorial_visto", "sim");
@@ -38,22 +37,22 @@ export function OnboardingModal({ visivel, aoFechar, color }: any) {
             {/* Passo 2 */}
             <View style={[styles.stepRow, { backgroundColor: color.card, borderColor: color.border }]}>
               <View style={[styles.iconBox, { backgroundColor: color.tint + "20" }]}>
-                <Ionicons name="barcode-outline" size={24} color={color.tint} />
+                <Ionicons name="qr-code-outline" size={24} color={color.tint} />
               </View>
               <View style={styles.stepText}>
-                <Text style={[styles.stepTitle, { color: color.text }]}>2. Escanear e Falar</Text>
-                <Text style={[styles.stepDesc, { color: color.textSecondary }]}>Use a câmera para ler os códigos de barras ou o microfone para adicionar produtos em segundos.</Text>
+                <Text style={[styles.stepTitle, { color: color.text }]}>2. Ler Notas (QR Code)</Text>
+                <Text style={[styles.stepDesc, { color: color.textSecondary }]}>Aponte para o QR Code da nota fiscal e o aplicativo extrairá todos os produtos da Sefaz magicamente!</Text>
               </View>
             </View>
 
             {/* Passo 3 */}
             <View style={[styles.stepRow, { backgroundColor: color.card, borderColor: color.border }]}>
               <View style={[styles.iconBox, { backgroundColor: color.info + "20" }]}>
-                <Ionicons name="receipt-outline" size={24} color={color.info} />
+                <Ionicons name="settings-outline" size={24} color={color.info} />
               </View>
               <View style={styles.stepText}>
-                <Text style={[styles.stepTitle, { color: color.text }]}>3. Histórico Inteligente</Text>
-                <Text style={[styles.stepDesc, { color: color.textSecondary }]}>Ao finalizar, a compra é salva na nuvem. Da próxima vez, mostraremos quanto você pagou!</Text>
+                <Text style={[styles.stepTitle, { color: color.text }]}>3. Organização Total</Text>
+                <Text style={[styles.stepDesc, { color: color.textSecondary }]}>Aba de Ajustes renovada! Encontre lá a sua Gaveta de Notas e os botões para Sair da Família de forma segura.</Text>
               </View>
             </View>
           </ScrollView>

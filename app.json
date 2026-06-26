@@ -3,7 +3,7 @@
     "name": "Dehouse Market",
     "slug": "controle-compras",
     "scheme": "dehousemarket",
-    "version": "1.0.41",
+    "version": "1.0.45",
     "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -21,20 +21,20 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "O aplicativo precisa aceder à câmara para escanear códigos de barras e fotografar os preços."
+          "cameraPermission": "A aplicação precisa de aceder à câmara para ler o QR Code das notas fiscais e escanear produtos."
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "O aplicativo precisa de acesso ao microfone para permitir a pesquisa e a adição de produtos por comando de voz."
+          "microphonePermission": "A aplicação precisa de acesso ao microfone para permitir a adição de produtos por comando de voz na lista de planeamento."
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "O aplicativo precisa de acesso ao microfone para adicionar produtos por voz.",
-          "speechRecognitionPermission": "O aplicativo precisa aceder ao reconhecimento de voz para converter as palavras faladas em texto."
+          "microphonePermission": "A aplicação precisa de acesso ao microfone para adicionar produtos por voz.",
+          "speechRecognitionPermission": "A aplicação precisa de aceder ao reconhecimento de voz para converter as palavras faladas em texto."
         }
       ],
       [
@@ -62,9 +62,9 @@
       "bundleIdentifier": "com.detech.dehousemarket",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "O aplicativo precisa aceder à câmara para escanear códigos de barras e fotografar os preços.",
-        "NSMicrophoneUsageDescription": "O aplicativo precisa de acesso ao microfone para permitir a pesquisa e a adição de produtos por comando de voz.",
-        "NSSpeechRecognitionUsageDescription": "O aplicativo precisa aceder ao reconhecimento de voz para converter as palavras faladas em texto."
+        "NSCameraUsageDescription": "A aplicação precisa de aceder à câmara para ler o QR Code das notas fiscais e escanear produtos.",
+        "NSMicrophoneUsageDescription": "A aplicação precisa de acesso ao microfone para permitir a adição de produtos por comando de voz na lista de planeamento.",
+        "NSSpeechRecognitionUsageDescription": "A aplicação precisa de aceder ao reconhecimento de voz para converter as palavras faladas em texto."
       }
     },
     "android": {
@@ -73,7 +73,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.detech.dehousemarket",
-      "versionCode": 54,
+      "versionCode": 57,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
